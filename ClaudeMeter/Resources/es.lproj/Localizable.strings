@@ -1,0 +1,42 @@
+/* Menu Bar */
+"Claude Tracker" = "ClaudeMeter (Beta)";
+"5-Hour Limit" = "Límite 5 horas";
+"7-Day Limit" = "Límite 7 días";
+"used" = "usado";
+"Resets" = "Se restablece en";
+"Refresh" = "Refrescar";
+"Settings..." = "Ajustes...";
+"Sign Out" = "Cerrar sesión";
+"Sign in to Claude" = "Iniciar sesión en Claude";
+"Track your Claude.ai usage from the menu bar" = "Controla tu uso de Claude.ai desde la barra de menús";
+"Sign In" = "Iniciar sesión";
+"Cancel" = "Cancelar";
+"Quit" = "Salir";
+"No usage limits available" = "Sin límites de uso disponibles";
+
+/* Settings */
+"General" = "General";
+"Launch at login" = "Abrir al iniciar sesión";
+"Language" = "Idioma";
+"System" = "Sistema";
+"English" = "Inglés";
+"Spanish" = "Español";
+"Display" = "Visualización";
+"Show percentage" = "Mostrar porcentaje";
+"Remaining" = "Restante";
+"Used" = "Usado";
+"Update interval" = "Intervalo de actualización";
+"3 minutes" = "3 minutos";
+"5 minutes" = "5 minutos";
+"10 minutes" = "10 minutos";
+"15 minutes" = "15 minutos";
+"30 minutes" = "30 minutos";
+"60 minutes" = "60 minutos";
+"Account" = "Cuenta";
+"Signed in as" = "Conectado como";
+"Plan" = "Plan";
+"Not signed in" = "Sin iniciar sesión";
+"About" = "Acerca de";
+"Version" = "Versión";
+"Developer" = "Desarrollador";
+"This is not an official app.\nIt is not endorsed by, nor affiliated with Anthropic (PBC) or Claude™." = "Esta aplicación ha sido desarrollada en menos de 1 hora con Claude Opus 4.5\n\nEsta no es una aplicación oficial.\nNo está respaldada ni afiliada a Anthropic (PBC) o Claude™.\n\nPuede enviar sus comentarios a feedback@infinitecontext.com";
