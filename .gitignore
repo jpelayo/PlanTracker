@@ -1,3 +1,6 @@
+# Xcode project file (contains signing team IDs)
+*.xcodeproj/project.pbxproj
+
 # Xcode user-specific files
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
