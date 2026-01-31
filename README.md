@@ -32,19 +32,23 @@ Download the latest release from the [Releases](../../releases) page.
 
 ### Build from Source
 
-```bash
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/ClaudeMeter.git
-cd ClaudeMeter
+> **Note:** The Xcode project file (`project.pbxproj`) is not included in this repository to protect signing credentials. You'll need to configure the project yourself.
 
-# Open in Xcode
-open ClaudeMeter/ClaudeMeter.xcodeproj
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/jpelayo/ClaudeMeter.git
+   cd ClaudeMeter
+   ```
 
-# Or build from command line
-xcodebuild -project "ClaudeMeter/ClaudeMeter.xcodeproj" \
-           -scheme "ClaudeMeter" \
-           -configuration Release build
-```
+2. Open `ClaudeMeter.xcodeproj` in Xcode
+
+3. Configure the project:
+   - Select the ClaudeMeter target
+   - Go to **Signing & Capabilities**
+   - Select your Development Team
+   - Xcode will generate the project configuration
+
+4. Build and run (⌘R)
 
 ## Usage
 
