@@ -2,6 +2,8 @@
 
 A native macOS menu bar app to track your Claude.ai usage limits in real-time.
 
+**Available on the Mac App Store.**
+
 ![macOS](https://img.shields.io/badge/macOS-15.0+-blue)
 ![Swift](https://img.shields.io/badge/Swift-6.2+-orange)
 ![License](https://img.shields.io/badge/license-Apache%202.0-blue)
