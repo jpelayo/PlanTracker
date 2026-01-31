@@ -22,24 +22,24 @@ struct MenuBarIconLabel: View {
 
     private var iconName: String {
         guard authState.isAuthenticated else {
-            return "gauge.with.dots.needle.bottom.50percent"
+            return "gauge.with.dots.needle.50percent"
         }
 
         guard let remaining = usageData.fiveHourRemaining else {
-            return "gauge.with.dots.needle.bottom.50percent"
+            return "gauge.with.dots.needle.50percent"
         }
 
         switch remaining {
         case 83...:
-            return "gauge.with.dots.needle.bottom.100percent"
+            return "gauge.with.dots.needle.100percent"
         case 67..<83:
-            return "gauge.with.dots.needle.bottom.67percent"
+            return "gauge.with.dots.needle.67percent"
         case 50..<67:
-            return "gauge.with.dots.needle.bottom.50percent"
+            return "gauge.with.dots.needle.50percent"
         case 17..<50:
-            return "gauge.with.dots.needle.bottom.33percent"
+            return "gauge.with.dots.needle.33percent"
         default:
-            return "gauge.with.dots.needle.bottom.0percent"
+            return "gauge.with.dots.needle.0percent"
         }
     }
 
