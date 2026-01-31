@@ -39,4 +39,4 @@
 "About" = "Acerca de";
 "Version" = "Versión";
 "Developer" = "Desarrollador";
-"This is not an official app.\nIt is not endorsed by, nor affiliated with Anthropic (PBC) or Claude™." = "Esta aplicación ha sido desarrollada en menos de 1 hora con Claude Opus 4.5\n\nEsta no es una aplicación oficial.\nNo está respaldada ni afiliada a Anthropic (PBC) o Claude™.\n\nPuede enviar sus comentarios a feedback@infinitecontext.com";
+"This is not an official app.\nIt is not endorsed by, nor affiliated with Anthropic (PBC) or Claude™." = "Esta aplicación ha sido desarrollada en menos de 1 hora con Claude Opus 4.5\n\nEsta no es una aplicación oficial.\nNo está respaldada ni afiliada a Anthropic (PBC) o Claude™.\n\nPuede enviar sus comentarios a feedback@infinitecontext.com\n\nEste software es código abierto:\nhttps://github.com/jpelayo/ClaudeMeter.git";

@@ -11,7 +11,7 @@ struct LoginWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .default()
+        configuration.websiteDataStore = .nonPersistent()
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
@@ -128,7 +128,8 @@ struct LoginWebView: NSViewRepresentable {
 
             checkTimer?.invalidate()
 
-            webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self] cookies in
+            let dataStore = webView.configuration.websiteDataStore
+            dataStore.httpCookieStore.getAllCookies { [weak self] cookies in
                 guard let self, !self.hasExtractedSession else { return }
 
                 let claudeCookies = cookies.filter { $0.domain.contains("claude.ai") }
@@ -147,6 +148,12 @@ struct LoginWebView: NSViewRepresentable {
                 print("[LoginWebView] Sending cookie string (\(cookieString.count) chars)")
 
                 self.hasExtractedSession = true
+
+                // Clear WebView cookies to prevent duplicate Keychain entries
+                for cookie in claudeCookies {
+                    dataStore.httpCookieStore.delete(cookie)
+                }
+
                 DispatchQueue.main.async {
                     self.onSessionKeyExtracted(cookieString)
                 }
