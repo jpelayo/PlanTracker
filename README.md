@@ -1,4 +1,4 @@
-# ClaudeMeter
+# PlanTracker
 
 A native macOS menu bar app to track your Claude.ai usage limits in real-time.
 
@@ -38,14 +38,14 @@ Download the latest release from the [Releases](../../releases) page.
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/jpelayo/ClaudeMeter.git
-   cd ClaudeMeter
+   git clone https://github.com/jpelayo/PlanTracker.git
+   cd PlanTracker
    ```
 
-2. Open `ClaudeMeter.xcodeproj` in Xcode
+2. Open `PlanTracker.xcodeproj` in Xcode
 
 3. Configure the project:
-   - Select the ClaudeMeter target
+   - Select the PlanTracker target
    - Go to **Signing & Capabilities**
    - Select your Development Team
    - Xcode will generate the project configuration
@@ -54,7 +54,7 @@ Download the latest release from the [Releases](../../releases) page.
 
 ## Usage
 
-1. Launch ClaudeMeter — it appears in your menu bar
+1. Launch PlanTracker — it appears in your menu bar
 2. Click the icon and sign in with your Claude.ai account
 3. View your current usage limits at a glance
 4. Configure refresh intervals and display preferences in Settings

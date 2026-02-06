@@ -51,6 +51,11 @@ crashlytics-build.properties
 crashlytics.properties
 fabric.properties
 
+# Markdown files (except README)
+*.md
+!README.md
+Markdown/
+
 # App-specific secrets
 *.xcconfig.local
 Secrets.swift
