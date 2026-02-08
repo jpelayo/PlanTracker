@@ -10,11 +10,17 @@ A native macOS menu bar app to track your Claude.ai usage limits in real-time.
 
 ## Features
 
+- **Multi-Model Usage Tracking** — Separate tracking for Opus, Sonnet, and overall Pro plan limits
+  - 5-Hour message limit (all plans)
+  - 7-Day Pro plan limit
+  - Opus (7-Day) — Track your most powerful model usage
+  - Sonnet (7-Day) — Monitor your balanced model consumption
 - **Menu Bar Integration** — Always visible usage stats without leaving your workflow
-- **5-Hour & 7-Day Limits** — Track both rolling usage windows with color-coded progress bars
+- **Color-Coded Progress Bars** — Green → Yellow → Red indicators for each limit
 - **All Plan Tiers** — Supports Free, Pro, Max, Team, and Enterprise accounts
 - **Secure Authentication** — Sign in via Claude.ai with session stored securely in Keychain
-- **Auto-Refresh** — Configurable polling interval to keep usage data current
+- **Auto-Refresh** — Configurable polling interval (3-60 minutes) to keep usage data current
+- **Bilingual Support** — English and Spanish interface
 - **Native Experience** — Built with SwiftUI for a lightweight, fast macOS app
 
 ## Screenshots
@@ -28,11 +34,21 @@ A native macOS menu bar app to track your Claude.ai usage limits in real-time.
 
 ## Installation
 
-### Download
+### Option 1: Download Pre-Built Binary (Recommended)
 
-Download the latest release from the [Releases](../../releases) page.
+**Ready-to-use `.dmg` available!** Download the latest release from the [Releases](../../releases) page.
 
-### Build from Source
+1. Download `PlanTracker.dmg` from [Releases](../../releases)
+2. Open the DMG and drag PlanTracker to your Applications folder
+3. **Important:** Right-click the app and select "Open" (first launch only)
+   - This is required because the app is not notarized
+   - macOS Gatekeeper will block double-click launch
+4. Click "Open" in the security dialog
+5. Grant Keychain access when prompted (click "Always Allow")
+
+After the first launch, you can open the app normally from Applications or Spotlight.
+
+### Option 2: Build from Source
 
 > **Note:** The Xcode project file (`project.pbxproj`) is not included in this repository to protect signing credentials. You'll need to configure the project yourself.
 
@@ -90,7 +106,15 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 This project is licensed under the Apache License 2.0 — see the [LICENSE](LICENSE) file for details.
 
+## Pro Tips
+
+- **Optimize token usage:** Use `/model sonnet` or `/model haiku` in Claude Code to reduce Opus consumption
+- **Monitor Sonnet usage:** Keep an eye on your Sonnet limit to optimize token spend
+- **Set update interval:** 5-10 minutes provides a good balance between freshness and API load
+- **Model selection:** Reserve Opus for complex tasks, use Sonnet for general work, and Haiku for simple operations
+
 ## Acknowledgments
 
 - Built with [SwiftUI](https://developer.apple.com/xcode/swiftui/)
+- Developed with Claude Opus 4.5 in under 2 hours
 - Inspired by the need to manage Claude.ai usage limits effectively
