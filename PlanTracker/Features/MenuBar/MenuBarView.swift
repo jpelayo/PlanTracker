@@ -78,11 +78,11 @@ struct MenuBarView: View {
                     }
                 }
 
-                // 7-Day Usage
+                // 7-Day Usage (Pro)
                 if let utilization = viewModel.usageData.sevenDayUtilization {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(String(localized: "7-Day Limit"))
+                            Text(String(localized: "7-Day Limit (Pro)"))
                                 .font(.subheadline)
                             Spacer()
                             Text("\(Int(utilization))% \(String(localized: "used"))")
@@ -92,6 +92,48 @@ struct MenuBarView: View {
                         ProgressView(value: utilization / 100)
                             .tint(colorForUtilization(utilization))
                         if let reset = viewModel.usageData.formattedSevenDayReset {
+                            Text("\(String(localized: "Resets")) \(reset)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                // 7-Day Opus Usage
+                if let utilization = viewModel.usageData.sevenDayOpusUtilization {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(String(localized: "Opus (7-Day)"))
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(Int(utilization))% \(String(localized: "used"))")
+                                .font(.subheadline)
+                                .foregroundStyle(colorForUtilization(utilization))
+                        }
+                        ProgressView(value: utilization / 100)
+                            .tint(colorForUtilization(utilization))
+                        if let reset = viewModel.usageData.formattedSevenDayOpusReset {
+                            Text("\(String(localized: "Resets")) \(reset)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                // 7-Day Sonnet Usage
+                if let utilization = viewModel.usageData.sevenDaySonnetUtilization {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(String(localized: "Sonnet (7-Day)"))
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(Int(utilization))% \(String(localized: "used"))")
+                                .font(.subheadline)
+                                .foregroundStyle(colorForUtilization(utilization))
+                        }
+                        ProgressView(value: utilization / 100)
+                            .tint(colorForUtilization(utilization))
+                        if let reset = viewModel.usageData.formattedSevenDaySonnetReset {
                             Text("\(String(localized: "Resets")) \(reset)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)

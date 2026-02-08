@@ -10,6 +10,10 @@ struct UsageData: Sendable, Equatable {
     let fiveHourResetsAt: Date?
     let sevenDayUtilization: Double?
     let sevenDayResetsAt: Date?
+    let sevenDayOpusUtilization: Double?
+    let sevenDayOpusResetsAt: Date?
+    let sevenDaySonnetUtilization: Double?
+    let sevenDaySonnetResetsAt: Date?
     let planTier: PlanTier
 
     /// Returns remaining percentage (100 - utilization)
@@ -23,6 +27,16 @@ struct UsageData: Sendable, Equatable {
         return 100 - util
     }
 
+    var sevenDayOpusRemaining: Double? {
+        guard let util = sevenDayOpusUtilization else { return nil }
+        return 100 - util
+    }
+
+    var sevenDaySonnetRemaining: Double? {
+        guard let util = sevenDaySonnetUtilization else { return nil }
+        return 100 - util
+    }
+
     var formattedFiveHourReset: String? {
         guard let date = fiveHourResetsAt else { return nil }
         return formatTimeRemaining(until: date)
@@ -30,6 +44,16 @@ struct UsageData: Sendable, Equatable {
 
     var formattedSevenDayReset: String? {
         guard let date = sevenDayResetsAt else { return nil }
+        return formatTimeRemaining(until: date)
+    }
+
+    var formattedSevenDayOpusReset: String? {
+        guard let date = sevenDayOpusResetsAt else { return nil }
+        return formatTimeRemaining(until: date)
+    }
+
+    var formattedSevenDaySonnetReset: String? {
+        guard let date = sevenDaySonnetResetsAt else { return nil }
         return formatTimeRemaining(until: date)
     }
 
@@ -55,6 +79,10 @@ struct UsageData: Sendable, Equatable {
         fiveHourResetsAt: nil,
         sevenDayUtilization: nil,
         sevenDayResetsAt: nil,
+        sevenDayOpusUtilization: nil,
+        sevenDayOpusResetsAt: nil,
+        sevenDaySonnetUtilization: nil,
+        sevenDaySonnetResetsAt: nil,
         planTier: .unknown
     )
 }

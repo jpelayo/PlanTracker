@@ -1,7 +1,9 @@
 /* Menu Bar */
 "Claude Tracker" = "PlanTracker para Claude";
 "5-Hour Limit" = "Límite 5 horas";
-"7-Day Limit" = "Límite 7 días";
+"7-Day Limit (Pro)" = "Límite 7 días (Pro)";
+"Opus (7-Day)" = "Opus (7 días)";
+"Sonnet (7-Day)" = "Sonnet (7 días)";
 "used" = "usado";
 "Resets" = "Se restablece en";
 "Refresh" = "Refrescar";

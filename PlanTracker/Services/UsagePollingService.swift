@@ -72,15 +72,23 @@ actor UsagePollingService {
 
         let fiveHourReset = usage.fiveHour?.resetsAt.flatMap { parseDate($0) }
         let sevenDayReset = usage.sevenDay?.resetsAt.flatMap { parseDate($0) }
+        let sevenDayOpusReset = usage.sevenDayOpus?.resetsAt.flatMap { parseDate($0) }
+        let sevenDaySonnetReset = usage.sevenDaySonnet?.resetsAt.flatMap { parseDate($0) }
 
         print("[UsagePollingService] 5h utilization: \(usage.fiveHour?.utilization ?? -1)%, resets: \(usage.fiveHour?.resetsAt ?? "nil")")
         print("[UsagePollingService] 7d utilization: \(usage.sevenDay?.utilization ?? -1)%, resets: \(usage.sevenDay?.resetsAt ?? "nil")")
+        print("[UsagePollingService] 7d Opus utilization: \(usage.sevenDayOpus?.utilization ?? -1)%, resets: \(usage.sevenDayOpus?.resetsAt ?? "nil")")
+        print("[UsagePollingService] 7d Sonnet utilization: \(usage.sevenDaySonnet?.utilization ?? -1)%, resets: \(usage.sevenDaySonnet?.resetsAt ?? "nil")")
 
         return UsageData(
             fiveHourUtilization: usage.fiveHour?.utilization,
             fiveHourResetsAt: fiveHourReset,
             sevenDayUtilization: usage.sevenDay?.utilization,
             sevenDayResetsAt: sevenDayReset,
+            sevenDayOpusUtilization: usage.sevenDayOpus?.utilization,
+            sevenDayOpusResetsAt: sevenDayOpusReset,
+            sevenDaySonnetUtilization: usage.sevenDaySonnet?.utilization,
+            sevenDaySonnetResetsAt: sevenDaySonnetReset,
             planTier: planTier
         )
     }
