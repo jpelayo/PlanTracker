@@ -15,7 +15,9 @@ struct LoginView: View {
             HStack {
                 Text(String(localized: "Sign in to Claude"))
                     .font(.headline)
+
                 Spacer()
+
                 Button(String(localized: "Cancel")) {
                     dismissWindow(id: "login")
                 }

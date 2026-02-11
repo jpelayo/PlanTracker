@@ -4,6 +4,7 @@
 "7-Day Limit (Pro)" = "Límite 7 días (Pro)";
 "Opus (7-Day)" = "Opus (7 días)";
 "Sonnet (7-Day)" = "Sonnet (7 días)";
+"Extra Credits" = "Créditos Extra";
 "used" = "usado";
 "Resets" = "Se restablece en";
 "Refresh" = "Refrescar";
@@ -15,6 +16,7 @@
 "Cancel" = "Cancelar";
 "Quit" = "Salir";
 "No usage limits available" = "Sin límites de uso disponibles";
+"Demo" = "Demo";
 
 /* Settings */
 "General" = "General";

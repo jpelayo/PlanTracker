@@ -23,6 +23,7 @@ final class UsageViewModel {
     private(set) var isLoading = false
     private(set) var errorMessage: String?
     private(set) var lastUpdated: Date?
+    private(set) var isDemoMode = false
 
     var pollingIntervalMinutes: Int = 5 {
         didSet {
@@ -190,6 +191,35 @@ final class UsageViewModel {
         isLoading = true
         await pollingService.fetchUsage()
         isLoading = false
+    }
+
+    func activateDemoMode() {
+        print("[UsageViewModel] Activating demo mode...")
+        isDemoMode = true
+        authState = .authenticated(email: "demo@example.com")
+
+        // Create realistic mock data
+        let now = Date()
+        let fiveHourReset = now.addingTimeInterval(3 * 3600) // 3 hours from now
+        let sevenDayReset = now.addingTimeInterval(4 * 24 * 3600) // 4 days from now
+
+        usageData = UsageData(
+            fiveHourUtilization: 42.0,
+            fiveHourResetsAt: fiveHourReset,
+            sevenDayUtilization: 67.5,
+            sevenDayResetsAt: sevenDayReset,
+            sevenDayOpusUtilization: 23.0,
+            sevenDayOpusResetsAt: sevenDayReset,
+            sevenDaySonnetUtilization: 81.2,
+            sevenDaySonnetResetsAt: sevenDayReset,
+            extraUsageUtilization: 15.5,
+            extraUsageResetsAt: sevenDayReset,
+            planTier: .pro
+        )
+
+        lastUpdated = now
+        errorMessage = nil
+        print("[UsageViewModel] Demo mode activated successfully")
     }
 
     private func startPolling() async {

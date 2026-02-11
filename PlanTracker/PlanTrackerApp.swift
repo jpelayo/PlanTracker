@@ -21,7 +21,10 @@ struct PlanTrackerApp: App {
             withBundleIdentifier: Bundle.main.bundleIdentifier ?? ""
         )
         if runningApps.count > 1 {
-            NSApp.terminate(nil)
+            // Terminate after a brief delay to ensure NSApp is ready
+            DispatchQueue.main.async {
+                NSApp.terminate(nil)
+            }
         }
     }
 

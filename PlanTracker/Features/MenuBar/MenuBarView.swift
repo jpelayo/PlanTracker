@@ -9,6 +9,8 @@ struct MenuBarView: View {
     @Bindable var viewModel: UsageViewModel
     @Environment(\.openWindow) private var openWindow
     @State private var showAbout = false
+    @State private var tapCount = 0
+    @State private var lastTapTime = Date.distantPast
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -39,9 +41,16 @@ struct MenuBarView: View {
             }
 
             if let email = viewModel.authState.email {
-                Text(email)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text(email)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if viewModel.isDemoMode {
+                        Text("• \(String(localized: "Demo"))")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                    }
+                }
             }
         }
         .padding()
@@ -134,6 +143,27 @@ struct MenuBarView: View {
                         ProgressView(value: utilization / 100)
                             .tint(colorForUtilization(utilization))
                         if let reset = viewModel.usageData.formattedSevenDaySonnetReset {
+                            Text("\(String(localized: "Resets")) \(reset)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                // Extra Usage (Add-on Credits)
+                if let utilization = viewModel.usageData.extraUsageUtilization {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(String(localized: "Extra Credits"))
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(Int(utilization))% \(String(localized: "used"))")
+                                .font(.subheadline)
+                                .foregroundStyle(colorForUtilization(utilization))
+                        }
+                        ProgressView(value: utilization / 100)
+                            .tint(colorForUtilization(utilization))
+                        if let reset = viewModel.usageData.formattedExtraUsageReset {
                             Text("\(String(localized: "Resets")) \(reset)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -234,9 +264,14 @@ struct MenuBarView: View {
     @ViewBuilder
     private var unauthenticatedContent: some View {
         VStack(spacing: 16) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
+            Button {
+                handleTap()
+            } label: {
+                Image(systemName: "gauge.with.dots.needle.50percent")
+                    .font(.largeTitle)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
 
             Text(String(localized: "Sign in to Claude"))
                 .font(.headline)
@@ -332,6 +367,31 @@ struct MenuBarView: View {
         case ..<50: .green
         case 50..<80: .yellow
         default: .red
+        }
+    }
+
+    private func handleTap() {
+        print("[MenuBarView] 🔵 TAP DETECTED!")
+
+        let now = Date()
+        let timeSinceLastTap = now.timeIntervalSince(lastTapTime)
+
+        // Reset to zero if more than 2 seconds between taps
+        if timeSinceLastTap > 2.0 {
+            tapCount = 0
+            print("[MenuBarView] ⏱️ Reset - too slow")
+        }
+
+        tapCount += 1
+        print("[MenuBarView] ✅ Tap count: \(tapCount)/7")
+
+        lastTapTime = now
+
+        // Activate demo mode on 7th tap
+        if tapCount >= 7 {
+            print("[MenuBarView] 🎉 DEMO MODE ACTIVATED!")
+            viewModel.activateDemoMode()
+            tapCount = 0
         }
     }
 }
