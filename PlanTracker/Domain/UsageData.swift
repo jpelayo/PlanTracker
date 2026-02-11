@@ -14,7 +14,13 @@ struct UsageData: Sendable, Equatable {
     let sevenDayOpusResetsAt: Date?
     let sevenDaySonnetUtilization: Double?
     let sevenDaySonnetResetsAt: Date?
+    let extraUsageUtilization: Double?
+    let extraUsageResetsAt: Date?
     let planTier: PlanTier
+    let prepaidCreditsRemaining: Int?  // Minor units (cents)
+    let prepaidCreditsTotal: Int?      // Minor units (cents)
+    let prepaidCreditsCurrency: String?
+    let prepaidAutoReloadEnabled: Bool?
 
     /// Returns remaining percentage (100 - utilization)
     var fiveHourRemaining: Double? {
@@ -37,6 +43,48 @@ struct UsageData: Sendable, Equatable {
         return 100 - util
     }
 
+    var extraUsageRemaining: Double? {
+        guard let util = extraUsageUtilization else { return nil }
+        return 100 - util
+    }
+
+    var prepaidCreditsUtilization: Double? {
+        guard let remaining = prepaidCreditsRemaining,
+              let total = prepaidCreditsTotal,
+              total > 0 else { return nil }
+        let used = Double(total - remaining)
+        return (used / Double(total)) * 100
+    }
+
+    var prepaidCreditsRemainingFormatted: String? {
+        guard let remaining = prepaidCreditsRemaining,
+              let currency = prepaidCreditsCurrency else { return nil }
+        return formatCurrency(amount: remaining, currency: currency)
+    }
+
+    var prepaidCreditsTotalFormatted: String? {
+        guard let total = prepaidCreditsTotal,
+              let currency = prepaidCreditsCurrency else { return nil }
+        return formatCurrency(amount: total, currency: currency)
+    }
+
+    var prepaidCreditsSpent: Int? {
+        guard let remaining = prepaidCreditsRemaining,
+              let total = prepaidCreditsTotal else { return nil }
+        return total - remaining
+    }
+
+    var prepaidCreditsSpentFormatted: String? {
+        guard let spent = prepaidCreditsSpent,
+              let currency = prepaidCreditsCurrency else { return nil }
+        return formatCurrency(amount: spent, currency: currency)
+    }
+
+    private func formatCurrency(amount: Int, currency: String) -> String {
+        let dollars = Double(amount) / 100.0
+        return String(format: "%.2f %@", dollars, currency)
+    }
+
     var formattedFiveHourReset: String? {
         guard let date = fiveHourResetsAt else { return nil }
         return formatTimeRemaining(until: date)
@@ -54,6 +102,11 @@ struct UsageData: Sendable, Equatable {
 
     var formattedSevenDaySonnetReset: String? {
         guard let date = sevenDaySonnetResetsAt else { return nil }
+        return formatTimeRemaining(until: date)
+    }
+
+    var formattedExtraUsageReset: String? {
+        guard let date = extraUsageResetsAt else { return nil }
         return formatTimeRemaining(until: date)
     }
 
@@ -83,6 +136,12 @@ struct UsageData: Sendable, Equatable {
         sevenDayOpusResetsAt: nil,
         sevenDaySonnetUtilization: nil,
         sevenDaySonnetResetsAt: nil,
-        planTier: .unknown
+        extraUsageUtilization: nil,
+        extraUsageResetsAt: nil,
+        planTier: .unknown,
+        prepaidCreditsRemaining: nil,
+        prepaidCreditsTotal: nil,
+        prepaidCreditsCurrency: nil,
+        prepaidAutoReloadEnabled: nil
     )
 }

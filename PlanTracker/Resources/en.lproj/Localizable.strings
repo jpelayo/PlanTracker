@@ -4,8 +4,11 @@
 "7-Day Limit (Pro)" = "7-Day Limit (Pro)";
 "Opus (7-Day)" = "Opus (7-Day)";
 "Sonnet (7-Day)" = "Sonnet (7-Day)";
-"Extra Credits" = "Extra Credits";
+"Extra Credits (Prepaid)" = "Extra Credits";
 "used" = "used";
+"remaining" = "remaining";
+"Auto-reload enabled" = "Auto-reload enabled";
+"No auto-reload" = "No auto-reload";
 "Resets" = "Resets within";
 "Refresh" = "Refresh";
 "Settings..." = "Settings...";

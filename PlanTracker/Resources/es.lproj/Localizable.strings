@@ -5,7 +5,11 @@
 "Opus (7-Day)" = "Opus (7 días)";
 "Sonnet (7-Day)" = "Sonnet (7 días)";
 "Extra Credits" = "Créditos Extra";
+"Extra Credits (Prepaid)" = "Créditos Extra";
 "used" = "usado";
+"remaining" = "restante";
+"Auto-reload enabled" = "Recarga automática activada";
+"No auto-reload" = "Sin recarga automática";
 "Resets" = "Se restablece en";
 "Refresh" = "Refrescar";
 "Settings..." = "Ajustes...";

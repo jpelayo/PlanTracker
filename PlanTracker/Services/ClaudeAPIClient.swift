@@ -91,6 +91,30 @@ actor ClaudeAPIClient {
         return try decode(UsageResponse.self, from: data, response: response)
     }
 
+    /// Fetch prepaid credits balance
+    func fetchPrepaidCredits(orgUuid: String) async throws -> PrepaidCreditsResponse? {
+        let request = try makeRequest(endpoint: "/api/organizations/\(orgUuid)/prepaid/credits")
+        do {
+            let (data, response) = try await performRequest(request)
+            return try decode(PrepaidCreditsResponse.self, from: data, response: response)
+        } catch {
+            print("[ClaudeAPIClient] Prepaid credits not available: \(error)")
+            return nil
+        }
+    }
+
+    /// Fetch overage credit grant info
+    func fetchOverageCreditGrant(orgUuid: String) async throws -> OverageCreditGrantResponse? {
+        let request = try makeRequest(endpoint: "/api/organizations/\(orgUuid)/overage_credit_grant")
+        do {
+            let (data, response) = try await performRequest(request)
+            return try decode(OverageCreditGrantResponse.self, from: data, response: response)
+        } catch {
+            print("[ClaudeAPIClient] Overage credit grant not available: \(error)")
+            return nil
+        }
+    }
+
     private func performRequest(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         do {
             let (data, response) = try await session.data(for: request)
@@ -177,4 +201,22 @@ struct SettingsResponse: Codable, Sendable {
         let messageLimit: Int?
         let resetsAt: String?
     }
+}
+
+struct PrepaidCreditsResponse: Codable, Sendable {
+    let amount: Int  // Amount in minor units (cents)
+    let currency: String
+    let autoReloadSettings: AutoReloadSettings?
+
+    struct AutoReloadSettings: Codable, Sendable {
+        let enabled: Bool?
+    }
+}
+
+struct OverageCreditGrantResponse: Codable, Sendable {
+    let available: Bool
+    let eligible: Bool
+    let granted: Bool
+    let amountMinorUnits: Int  // Original grant amount in minor units
+    let currency: String
 }

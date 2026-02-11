@@ -214,7 +214,11 @@ final class UsageViewModel {
             sevenDaySonnetResetsAt: sevenDayReset,
             extraUsageUtilization: 15.5,
             extraUsageResetsAt: sevenDayReset,
-            planTier: .pro
+            planTier: .pro,
+            prepaidCreditsRemaining: 4280,  // $42.80
+            prepaidCreditsTotal: 5000,      // $50.00
+            prepaidCreditsCurrency: "USD",
+            prepaidAutoReloadEnabled: false
         )
 
         lastUpdated = now

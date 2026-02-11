@@ -74,11 +74,31 @@ actor UsagePollingService {
         let sevenDayReset = usage.sevenDay?.resetsAt.flatMap { parseDate($0) }
         let sevenDayOpusReset = usage.sevenDayOpus?.resetsAt.flatMap { parseDate($0) }
         let sevenDaySonnetReset = usage.sevenDaySonnet?.resetsAt.flatMap { parseDate($0) }
+        let extraUsageReset = usage.extraUsage?.resetsAt.flatMap { parseDate($0) }
 
         print("[UsagePollingService] 5h utilization: \(usage.fiveHour?.utilization ?? -1)%, resets: \(usage.fiveHour?.resetsAt ?? "nil")")
         print("[UsagePollingService] 7d utilization: \(usage.sevenDay?.utilization ?? -1)%, resets: \(usage.sevenDay?.resetsAt ?? "nil")")
         print("[UsagePollingService] 7d Opus utilization: \(usage.sevenDayOpus?.utilization ?? -1)%, resets: \(usage.sevenDayOpus?.resetsAt ?? "nil")")
         print("[UsagePollingService] 7d Sonnet utilization: \(usage.sevenDaySonnet?.utilization ?? -1)%, resets: \(usage.sevenDaySonnet?.resetsAt ?? "nil")")
+        print("[UsagePollingService] Extra usage: \(usage.extraUsage?.utilization ?? -1)%, resets: \(usage.extraUsage?.resetsAt ?? "nil")")
+
+        // Fetch prepaid credits info
+        let prepaidCredits = try? await apiClient.fetchPrepaidCredits(orgUuid: orgUuid)
+        let creditGrant = try? await apiClient.fetchOverageCreditGrant(orgUuid: orgUuid)
+
+        var prepaidRemaining: Int?
+        var prepaidTotal: Int?
+        var prepaidCurrency: String?
+        var autoReloadEnabled: Bool?
+
+        if let credits = prepaidCredits, let grant = creditGrant, grant.granted {
+            prepaidRemaining = credits.amount
+            prepaidTotal = grant.amountMinorUnits
+            prepaidCurrency = credits.currency
+            // If autoReloadSettings is null, treat as disabled (false)
+            autoReloadEnabled = credits.autoReloadSettings?.enabled ?? false
+            print("[UsagePollingService] Prepaid credits: \(credits.amount) / \(grant.amountMinorUnits) \(credits.currency), Auto-reload: \(autoReloadEnabled ?? false)")
+        }
 
         return UsageData(
             fiveHourUtilization: usage.fiveHour?.utilization,
@@ -89,7 +109,13 @@ actor UsagePollingService {
             sevenDayOpusResetsAt: sevenDayOpusReset,
             sevenDaySonnetUtilization: usage.sevenDaySonnet?.utilization,
             sevenDaySonnetResetsAt: sevenDaySonnetReset,
-            planTier: planTier
+            extraUsageUtilization: usage.extraUsage?.utilization,
+            extraUsageResetsAt: extraUsageReset,
+            planTier: planTier,
+            prepaidCreditsRemaining: prepaidRemaining,
+            prepaidCreditsTotal: prepaidTotal,
+            prepaidCreditsCurrency: prepaidCurrency,
+            prepaidAutoReloadEnabled: autoReloadEnabled
         )
     }
 

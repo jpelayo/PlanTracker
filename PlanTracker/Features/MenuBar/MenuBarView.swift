@@ -170,6 +170,55 @@ struct MenuBarView: View {
                         }
                     }
                 }
+
+                // Prepaid Credits
+                if let utilization = viewModel.usageData.prepaidCreditsUtilization,
+                   let remaining = viewModel.usageData.prepaidCreditsRemainingFormatted,
+                   let spent = viewModel.usageData.prepaidCreditsSpentFormatted,
+                   let total = viewModel.usageData.prepaidCreditsTotalFormatted {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(String(localized: "Extra Credits (Prepaid)"))
+                                .font(.subheadline)
+                            Spacer()
+                            HStack(spacing: 2) {
+                                Text(spent)
+                                    .foregroundStyle(.red)
+                                Text("/")
+                                    .foregroundStyle(.secondary)
+                                Text(total)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .font(.subheadline)
+                        }
+                        ProgressView(value: utilization / 100)
+                            .tint(colorForUtilization(utilization))
+                        Text("\(Int(100 - utilization))% \(String(localized: "remaining")) (\(remaining))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        // Auto-reload hint
+                        if let autoReload = viewModel.usageData.prepaidAutoReloadEnabled {
+                            if autoReload {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "arrow.clockwise.circle.fill")
+                                        .font(.caption2)
+                                    Text(String(localized: "Auto-reload enabled"))
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                            } else {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "info.circle")
+                                        .font(.caption2)
+                                    Text(String(localized: "No auto-reload"))
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
             }
         }
         .padding()
