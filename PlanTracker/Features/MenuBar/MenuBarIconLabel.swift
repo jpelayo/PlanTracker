@@ -13,11 +13,20 @@ struct MenuBarIconLabel: View {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: iconName)
+                .foregroundStyle(iconColor)
             if let percentage = displayPercentage {
                 Text(percentage)
                     .monospacedDigit()
             }
         }
+    }
+
+    private var iconColor: Color {
+        // Turn red when 7-day limit is >= 95% used
+        if let sevenDayUtil = usageData.sevenDayUtilization, sevenDayUtil >= 95.0 {
+            return .red
+        }
+        return .primary
     }
 
     private var iconName: String {
