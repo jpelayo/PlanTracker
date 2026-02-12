@@ -24,7 +24,8 @@
 /* Settings */
 "General" = "General";
 "Launch at login" = "Launch at login";
-"Language" = "Language";
+"Change language" = "Change language";
+"(requires app restart)" = "(requires app restart)";
 "System" = "System";
 "English" = "English";
 "Spanish" = "Spanish";

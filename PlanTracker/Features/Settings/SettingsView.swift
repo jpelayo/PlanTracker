@@ -13,12 +13,18 @@ struct SettingsView: View {
             Section(String(localized: "General")) {
                 Toggle(String(localized: "Launch at login"), isOn: $viewModel.launchAtLogin)
 
-                Picker(String(localized: "Language"), selection: $viewModel.appLanguage) {
-                    ForEach(AppLanguage.allCases, id: \.self) { language in
-                        Text(language.displayName).tag(language)
+                VStack(alignment: .leading, spacing: 2) {
+                    Picker(String(localized: "Change language"), selection: $viewModel.appLanguage) {
+                        ForEach(AppLanguage.allCases, id: \.self) { language in
+                            Text(language.displayName).tag(language)
+                        }
                     }
+                    .pickerStyle(.menu)
+
+                    Text(String(localized: "(requires app restart)"))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
-                .pickerStyle(.menu)
             }
 
             Section(String(localized: "Display")) {
@@ -72,6 +78,9 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 400)
         .fixedSize(horizontal: false, vertical: true)
+        .onAppear {
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 }
 
