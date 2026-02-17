@@ -61,6 +61,26 @@ final class UsageViewModel {
         }
     }
 
+    var trackSessionTime: Bool = false {
+        didSet {
+            UserDefaults.standard.set(trackSessionTime, forKey: "trackSessionTime")
+        }
+    }
+
+    var sessionCheckIntervalMinutes: Int = 5 {
+        didSet {
+            UserDefaults.standard.set(sessionCheckIntervalMinutes, forKey: "sessionCheckIntervalMinutes")
+        }
+    }
+
+    var sessionResetHour: Int = 4 {
+        didSet {
+            UserDefaults.standard.set(sessionResetHour, forKey: "sessionResetHour")
+        }
+    }
+
+    let sessionTracker = SessionTracker()
+
     private let keychainService: KeychainService
     private let apiClient: ClaudeAPIClient
     private let authService: AuthenticationService
@@ -91,6 +111,20 @@ final class UsageViewModel {
         }
         applyLanguage()
 
+        if UserDefaults.standard.object(forKey: "trackSessionTime") != nil {
+            self.trackSessionTime = UserDefaults.standard.bool(forKey: "trackSessionTime")
+        }
+
+        let storedCheckInterval = UserDefaults.standard.integer(forKey: "sessionCheckIntervalMinutes")
+        if storedCheckInterval > 0 {
+            self.sessionCheckIntervalMinutes = storedCheckInterval
+        }
+
+        let storedResetHour = UserDefaults.standard.integer(forKey: "sessionResetHour")
+        if UserDefaults.standard.object(forKey: "sessionResetHour") != nil {
+            self.sessionResetHour = storedResetHour
+        }
+
         setupPollingCallbacks()
     }
 
@@ -111,6 +145,15 @@ final class UsageViewModel {
                         self?.usageData = usage
                         self?.lastUpdated = Date()
                         self?.errorMessage = nil
+                        if self?.trackSessionTime == true {
+                            self?.sessionTracker.processTick(
+                                fiveHourUtilization: usage.fiveHourUtilization,
+                                prepaidCreditsRemaining: usage.prepaidCreditsRemaining,
+                                overageUsedCredits: usage.overageUsedCredits,
+                                minInterval: TimeInterval((self?.sessionCheckIntervalMinutes ?? 5) * 60),
+                                resetHour: self?.sessionResetHour ?? 4
+                            )
+                        }
                     }
                 },
                 onError: { [weak self] error in
@@ -218,11 +261,17 @@ final class UsageViewModel {
             prepaidCreditsRemaining: 4280,  // $42.80
             prepaidCreditsTotal: 5000,      // $50.00
             prepaidCreditsCurrency: "USD",
-            prepaidAutoReloadEnabled: false
+            prepaidAutoReloadEnabled: false,
+            overageMonthlyLimit: 5000,      // $50.00
+            overageUsedCredits: 1359,       // $13.59
+            overageCurrency: "USD",
+            overageEnabled: true,
+            overageOutOfCredits: false
         )
 
         lastUpdated = now
         errorMessage = nil
+        sessionTracker.setMockAccumulated(83 * 60) // 1h 23m
         print("[UsageViewModel] Demo mode activated successfully")
     }
 
@@ -231,6 +280,18 @@ final class UsageViewModel {
         let interval = TimeInterval(pollingIntervalMinutes * 60)
         await pollingService.setPollingInterval(interval)
         await pollingService.startPolling()
+    }
+
+    var dailySessionFormatted: String? {
+        guard trackSessionTime else { return nil }
+        let s = sessionTracker.totalSeconds
+        guard s >= 60 else { return nil }
+        let h = Int(s) / 3600
+        let m = (Int(s) % 3600) / 60
+        let time = h > 0
+            ? String(localized: "\(h) hours \(m) minutes")
+            : String(localized: "\(m) minutes")
+        return String(localized: "Today's usage:") + " " + time
     }
 
     private func handleError(_ error: Error) {

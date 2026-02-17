@@ -103,6 +103,18 @@ actor ClaudeAPIClient {
         }
     }
 
+    /// Fetch monthly overage spend limit
+    func fetchOverageSpendLimit(orgUuid: String) async throws -> OverageSpendLimitResponse? {
+        let request = try makeRequest(endpoint: "/api/organizations/\(orgUuid)/overage_spend_limit")
+        do {
+            let (data, response) = try await performRequest(request)
+            return try decode(OverageSpendLimitResponse.self, from: data, response: response)
+        } catch {
+            print("[ClaudeAPIClient] Overage spend limit not available: \(error)")
+            return nil
+        }
+    }
+
     /// Fetch overage credit grant info
     func fetchOverageCreditGrant(orgUuid: String) async throws -> OverageCreditGrantResponse? {
         let request = try makeRequest(endpoint: "/api/organizations/\(orgUuid)/overage_credit_grant")
@@ -219,4 +231,13 @@ struct OverageCreditGrantResponse: Codable, Sendable {
     let granted: Bool
     let amountMinorUnits: Int  // Original grant amount in minor units
     let currency: String
+}
+
+struct OverageSpendLimitResponse: Codable, Sendable {
+    let isEnabled: Bool
+    let monthlyCreditLimit: Int   // Minor units (cents)
+    let currency: String
+    let usedCredits: Int          // Minor units (cents)
+    let outOfCredits: Bool
+    let disabledReason: String?
 }

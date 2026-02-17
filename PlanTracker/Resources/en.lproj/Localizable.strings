@@ -40,6 +40,12 @@
 "15 minutes" = "15 minutes";
 "30 minutes" = "30 minutes";
 "60 minutes" = "60 minutes";
+"Monthly Budget" = "Monthly Budget";
+"Monthly budget exhausted" = "Monthly budget exhausted";
+"Track session time" = "Track session time";
+"Session detection" = "Session detection";
+"Daily reset" = "Daily reset";
+"Today's usage:" = "Today's usage:";
 "Account" = "Account";
 "Signed in as" = "Signed in as";
 "Plan" = "Plan";

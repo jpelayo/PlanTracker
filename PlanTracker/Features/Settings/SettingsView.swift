@@ -43,6 +43,24 @@ struct SettingsView: View {
                     Text(String(localized: "60 minutes")).tag(60)
                 }
                 .pickerStyle(.menu)
+
+                Toggle(String(localized: "Track session time"), isOn: $viewModel.trackSessionTime)
+
+                if viewModel.trackSessionTime {
+                    Picker(String(localized: "Session detection"), selection: $viewModel.sessionCheckIntervalMinutes) {
+                        ForEach(SessionCheckInterval.allCases, id: \.rawValue) { interval in
+                            Text(interval.displayName).tag(interval.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Picker(String(localized: "Daily reset"), selection: $viewModel.sessionResetHour) {
+                        ForEach([0, 1, 2, 3, 4, 5, 6], id: \.self) { hour in
+                            Text(hour == 0 ? "12am" : "\(hour)am").tag(hour)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
             }
 
             Section(String(localized: "Account")) {

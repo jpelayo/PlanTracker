@@ -85,19 +85,26 @@ actor UsagePollingService {
         // Fetch prepaid credits info
         let prepaidCredits = try? await apiClient.fetchPrepaidCredits(orgUuid: orgUuid)
         let creditGrant = try? await apiClient.fetchOverageCreditGrant(orgUuid: orgUuid)
+        let overageSpendLimit = try? await apiClient.fetchOverageSpendLimit(orgUuid: orgUuid)
 
         var prepaidRemaining: Int?
         var prepaidTotal: Int?
         var prepaidCurrency: String?
         var autoReloadEnabled: Bool?
 
-        if let credits = prepaidCredits, let grant = creditGrant, grant.granted {
+        if let credits = prepaidCredits {
             prepaidRemaining = credits.amount
-            prepaidTotal = grant.amountMinorUnits
             prepaidCurrency = credits.currency
-            // If autoReloadSettings is null, treat as disabled (false)
             autoReloadEnabled = credits.autoReloadSettings?.enabled ?? false
-            print("[UsagePollingService] Prepaid credits: \(credits.amount) / \(grant.amountMinorUnits) \(credits.currency), Auto-reload: \(autoReloadEnabled ?? false)")
+            // Only set total when the grant is confirmed, enabling utilization bar
+            if let grant = creditGrant, grant.granted {
+                prepaidTotal = grant.amountMinorUnits
+            }
+            print("[UsagePollingService] Prepaid credits: \(credits.amount) \(credits.currency), total: \(prepaidTotal.map(String.init) ?? "n/a"), Auto-reload: \(autoReloadEnabled ?? false)")
+        }
+
+        if let overage = overageSpendLimit {
+            print("[UsagePollingService] Overage spend limit: \(overage.usedCredits)/\(overage.monthlyCreditLimit) \(overage.currency), enabled: \(overage.isEnabled)")
         }
 
         return UsageData(
@@ -115,7 +122,12 @@ actor UsagePollingService {
             prepaidCreditsRemaining: prepaidRemaining,
             prepaidCreditsTotal: prepaidTotal,
             prepaidCreditsCurrency: prepaidCurrency,
-            prepaidAutoReloadEnabled: autoReloadEnabled
+            prepaidAutoReloadEnabled: autoReloadEnabled,
+            overageMonthlyLimit: overageSpendLimit?.monthlyCreditLimit,
+            overageUsedCredits: overageSpendLimit?.usedCredits,
+            overageCurrency: overageSpendLimit?.currency,
+            overageEnabled: overageSpendLimit?.isEnabled,
+            overageOutOfCredits: overageSpendLimit?.outOfCredits
         )
     }
 

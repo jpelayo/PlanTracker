@@ -51,6 +51,11 @@ struct MenuBarView: View {
                             .foregroundStyle(.orange)
                     }
                 }
+                if let sessionTime = viewModel.dailySessionFormatted {
+                    Text(sessionTime)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding()
@@ -171,31 +176,32 @@ struct MenuBarView: View {
                     }
                 }
 
-                // Prepaid Credits
-                if let utilization = viewModel.usageData.prepaidCreditsUtilization,
-                   let remaining = viewModel.usageData.prepaidCreditsRemainingFormatted,
-                   let spent = viewModel.usageData.prepaidCreditsSpentFormatted,
-                   let total = viewModel.usageData.prepaidCreditsTotalFormatted {
+                // Extra Credits (monthly overage budget)
+                if let enabled = viewModel.usageData.overageEnabled, enabled,
+                   let used = viewModel.usageData.overageUsedFormatted,
+                   let limit = viewModel.usageData.overageLimitFormatted,
+                   let utilization = viewModel.usageData.overageUtilization,
+                   let remaining = viewModel.usageData.overageRemainingFormatted {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(String(localized: "Extra Credits (Prepaid)"))
                                 .font(.subheadline)
                             Spacer()
                             HStack(spacing: 2) {
-                                Text(spent)
+                                Text(used)
                                     .foregroundStyle(.red)
                                 Text("/")
                                     .foregroundStyle(.secondary)
-                                Text(total)
+                                Text(limit)
                                     .foregroundStyle(.secondary)
                             }
                             .font(.subheadline)
                         }
-                        ProgressView(value: utilization / 100)
+                        ProgressView(value: min(utilization / 100, 1.0))
                             .tint(colorForUtilization(utilization))
                         Text("\(Int(100 - utilization))% \(String(localized: "remaining")) (\(remaining))")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(viewModel.usageData.overageOutOfCredits == true ? .red : .secondary)
 
                         // Auto-reload hint
                         if let autoReload = viewModel.usageData.prepaidAutoReloadEnabled {

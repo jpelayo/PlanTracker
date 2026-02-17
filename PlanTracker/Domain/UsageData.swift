@@ -21,6 +21,11 @@ struct UsageData: Sendable, Equatable {
     let prepaidCreditsTotal: Int?      // Minor units (cents)
     let prepaidCreditsCurrency: String?
     let prepaidAutoReloadEnabled: Bool?
+    let overageMonthlyLimit: Int?      // Minor units (cents)
+    let overageUsedCredits: Int?       // Minor units (cents)
+    let overageCurrency: String?
+    let overageEnabled: Bool?
+    let overageOutOfCredits: Bool?
 
     /// Returns remaining percentage (100 - utilization)
     var fiveHourRemaining: Double? {
@@ -110,6 +115,28 @@ struct UsageData: Sendable, Equatable {
         return formatTimeRemaining(until: date)
     }
 
+    var overageUtilization: Double? {
+        guard let used = overageUsedCredits, let limit = overageMonthlyLimit, limit > 0 else { return nil }
+        return (Double(used) / Double(limit)) * 100
+    }
+
+    var overageUsedFormatted: String? {
+        guard let used = overageUsedCredits, let currency = overageCurrency else { return nil }
+        return formatCurrency(amount: used, currency: currency)
+    }
+
+    var overageLimitFormatted: String? {
+        guard let limit = overageMonthlyLimit, let currency = overageCurrency else { return nil }
+        return formatCurrency(amount: limit, currency: currency)
+    }
+
+    var overageRemainingFormatted: String? {
+        guard let limit = overageMonthlyLimit,
+              let used = overageUsedCredits,
+              let currency = overageCurrency else { return nil }
+        return formatCurrency(amount: max(0, limit - used), currency: currency)
+    }
+
     private func formatTimeRemaining(until date: Date) -> String {
         let interval = date.timeIntervalSince(Date())
         guard interval > 0 else { return "" }
@@ -142,6 +169,11 @@ struct UsageData: Sendable, Equatable {
         prepaidCreditsRemaining: nil,
         prepaidCreditsTotal: nil,
         prepaidCreditsCurrency: nil,
-        prepaidAutoReloadEnabled: nil
+        prepaidAutoReloadEnabled: nil,
+        overageMonthlyLimit: nil,
+        overageUsedCredits: nil,
+        overageCurrency: nil,
+        overageEnabled: nil,
+        overageOutOfCredits: nil
     )
 }
