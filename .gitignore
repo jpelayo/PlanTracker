@@ -38,7 +38,7 @@ Pods/
 Appstore/
 .claude/
 Artwork/
-*.zip
+
 
 # Fastlane
 fastlane/report.xml
@@ -51,6 +51,10 @@ fastlane/test_output
 .AppleDouble
 .LSOverride
 ._*
+*.zip
+.*/
+*.sh
+.index*
 
 # Crashlytics
 crashlytics-build.properties
