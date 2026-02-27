@@ -258,8 +258,10 @@ final class UsageViewModel {
             sevenDayOpusName: "Code Review",
             sevenDaySonnetUtilization: 81.2,
             sevenDaySonnetResetsAt: sevenDayReset,
+            sevenDaySonnetName: "Additional Weekly Limit",
             extraUsageUtilization: 15.5,
             extraUsageResetsAt: sevenDayReset,
+            extraUsageName: "Additional Limit",
             planTier: .pro,
             prepaidCreditsRemaining: 4280,  // $42.80
             prepaidCreditsTotal: 5000,      // $50.00

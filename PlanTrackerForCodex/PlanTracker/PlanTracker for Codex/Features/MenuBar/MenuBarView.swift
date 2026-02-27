@@ -114,7 +114,7 @@ struct MenuBarView: View {
                 }
 
                 // 7-Day Opus Usage
-                if let utilization = viewModel.usageData.sevenDayOpusUtilization {
+                if let utilization = viewModel.usageData.sevenDayOpusUtilization, utilization > 0 {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(viewModel.usageData.sevenDayOpusName ?? String(localized: "Code Review"))
@@ -135,10 +135,10 @@ struct MenuBarView: View {
                 }
 
                 // 7-Day Sonnet Usage
-                if let utilization = viewModel.usageData.sevenDaySonnetUtilization {
+                if let utilization = viewModel.usageData.sevenDaySonnetUtilization, utilization > 0 {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(String(localized: "Sonnet (7-Day)"))
+                            Text(viewModel.usageData.sevenDaySonnetName ?? String(localized: "Sonnet (7-Day)"))
                                 .font(.subheadline)
                             Spacer()
                             Text("\(Int(utilization))% \(String(localized: "used"))")
@@ -155,11 +155,13 @@ struct MenuBarView: View {
                     }
                 }
 
-                // Extra Usage (Add-on Credits)
-                if let utilization = viewModel.usageData.extraUsageUtilization {
+                // Extra usage row only when backend provides a meaningful name.
+                if let utilization = viewModel.usageData.extraUsageUtilization,
+                   utilization > 0,
+                   let label = viewModel.usageData.extraUsageName {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(String(localized: "Extra Credits"))
+                            Text(label)
                                 .font(.subheadline)
                             Spacer()
                             Text("\(Int(utilization))% \(String(localized: "used"))")

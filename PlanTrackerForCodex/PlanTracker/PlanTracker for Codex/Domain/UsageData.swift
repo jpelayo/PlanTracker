@@ -15,8 +15,10 @@ struct UsageData: Sendable, Equatable {
     let sevenDayOpusName: String?
     let sevenDaySonnetUtilization: Double?
     let sevenDaySonnetResetsAt: Date?
+    let sevenDaySonnetName: String?
     let extraUsageUtilization: Double?
     let extraUsageResetsAt: Date?
+    let extraUsageName: String?
     let planTier: PlanTier
     let prepaidCreditsRemaining: Int?  // Minor units (cents)
     let prepaidCreditsTotal: Int?      // Minor units (cents)
@@ -165,8 +167,10 @@ struct UsageData: Sendable, Equatable {
         sevenDayOpusName: nil,
         sevenDaySonnetUtilization: nil,
         sevenDaySonnetResetsAt: nil,
+        sevenDaySonnetName: nil,
         extraUsageUtilization: nil,
         extraUsageResetsAt: nil,
+        extraUsageName: nil,
         planTier: .unknown,
         prepaidCreditsRemaining: nil,
         prepaidCreditsTotal: nil,

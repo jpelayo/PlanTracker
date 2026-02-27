@@ -96,7 +96,10 @@ actor OpenAIAPIClient {
                 )
                 let (data, response) = try await performRequest(request)
                 let json = try decodeJSON(from: data, response: response)
-                let snapshot = OpenAIUsageParser.parseSnapshot(from: json)
+                let snapshot = OpenAIUsageParser.parseSnapshot(
+                    from: json,
+                    collectLimits: candidate.collectLimits
+                )
 
                 print("[OpenAIAPIClient] \(candidate.endpoint) -> \(snapshot.limits.count) limit candidates")
                 snapshots.append(snapshot)
@@ -117,22 +120,55 @@ actor OpenAIAPIClient {
         throw APIError.usageDataUnavailable
     }
 
-    private func usageEndpoints() -> [(endpoint: String, method: String, body: Data?, requiresAuth: Bool)] {
-        let sentinelBody = try? JSONSerialization.data(withJSONObject: [
-            "conversation_mode_kind": "primary_assistant",
-            "model": "auto",
-            "messages": []
-        ])
-
+    private func usageEndpoints() -> [UsageEndpointCandidate] {
         return [
-            ("/backend-api/wham/usage", "GET", nil, true),
-            ("/backend-api/wham/usage/credit-usage-events", "GET", nil, true),
-            ("/backend-api/checkout_pricing_config/configs/\(Locale.current.regionCode ?? "US")", "GET", nil, true),
-            ("/backend-api/checkout_pricing_config/configs/ES", "GET", nil, true),
-            ("/backend-api/sentinel/chat-requirements", "POST", sentinelBody, true),
-            ("/backend-api/accounts/check/v4-2023-04-27", "GET", nil, true),
-            ("/backend-api/accounts/check", "GET", nil, true)
+            UsageEndpointCandidate(
+                endpoint: "/backend-api/wham/usage",
+                method: "GET",
+                body: nil,
+                requiresAuth: true,
+                collectLimits: true
+            ),
+            UsageEndpointCandidate(
+                endpoint: "/backend-api/wham/usage/daily-token-usage-breakdown",
+                method: "GET",
+                body: nil,
+                requiresAuth: true,
+                collectLimits: false
+            ),
+            UsageEndpointCandidate(
+                endpoint: "/backend-api/wham/usage/credit-usage-events",
+                method: "GET",
+                body: nil,
+                requiresAuth: true,
+                collectLimits: false
+            ),
+            UsageEndpointCandidate(
+                endpoint: "/backend-api/checkout_pricing_config/configs/\(currentRegionIdentifier())",
+                method: "GET",
+                body: nil,
+                requiresAuth: true,
+                collectLimits: false
+            ),
+            UsageEndpointCandidate(
+                endpoint: "/backend-api/checkout_pricing_config/configs/ES",
+                method: "GET",
+                body: nil,
+                requiresAuth: true,
+                collectLimits: false
+            ),
+            UsageEndpointCandidate(
+                endpoint: "/backend-api/subscriptions",
+                method: "GET",
+                body: nil,
+                requiresAuth: true,
+                collectLimits: false
+            )
         ]
+    }
+
+    private func currentRegionIdentifier() -> String {
+        Locale.current.region?.identifier ?? "US"
     }
 
     private func mergeSnapshots(_ snapshots: [OpenAIUsageSnapshot]) -> OpenAIUsageSnapshot {
@@ -147,6 +183,14 @@ actor OpenAIAPIClient {
         }
 
         return OpenAIUsageSnapshot(planLabel: planLabel, limits: mergedLimits)
+    }
+
+    private struct UsageEndpointCandidate {
+        let endpoint: String
+        let method: String
+        let body: Data?
+        let requiresAuth: Bool
+        let collectLimits: Bool
     }
 
     private func makeRequest(
@@ -257,8 +301,8 @@ struct OpenAIUsageLimit: Sendable, Hashable {
 }
 
 private enum OpenAIUsageParser {
-    static func parseSnapshot(from json: Any) -> OpenAIUsageSnapshot {
-        var collector = Collector()
+    static func parseSnapshot(from json: Any, collectLimits: Bool) -> OpenAIUsageSnapshot {
+        var collector = Collector(collectLimits: collectLimits)
         collector.walk(json, path: [])
         return OpenAIUsageSnapshot(
             planLabel: collector.planLabel,
@@ -267,8 +311,15 @@ private enum OpenAIUsageParser {
     }
 
     private struct Collector {
+        let collectLimits: Bool
         var planLabel: String?
         private var limits: [CandidateLimit] = []
+
+        init(collectLimits: Bool) {
+            self.collectLimits = collectLimits
+            self.planLabel = nil
+            self.limits = []
+        }
 
         mutating func walk(_ value: Any, path: [String]) {
             if let dict = value as? [String: Any] {
@@ -291,7 +342,7 @@ private enum OpenAIUsageParser {
                 planLabel = detectPlan(in: dictionary)
             }
 
-            if let candidate = candidateLimit(from: dictionary, path: path) {
+            if collectLimits, let candidate = candidateLimit(from: dictionary, path: path) {
                 limits.append(candidate)
             }
         }
@@ -317,6 +368,8 @@ private enum OpenAIUsageParser {
         }
 
         private func candidateLimit(from dictionary: [String: Any], path: [String]) -> CandidateLimit? {
+            guard isLikelyUsageDictionary(dictionary, path: path) else { return nil }
+
             let percentKeys = ["utilization", "percent_used", "used_percent", "usage_percent", "usagePct"]
             var utilization = percentKeys.compactMap { OpenAIUsageParser.number(from: dictionary[$0]) }.first
 
@@ -350,6 +403,53 @@ private enum OpenAIUsageParser {
             let name = extractName(from: dictionary, path: path)
 
             return CandidateLimit(name: name, utilization: clampedUtilization, resetsAt: resetDate)
+        }
+
+        private func isLikelyUsageDictionary(_ dictionary: [String: Any], path: [String]) -> Bool {
+            let normalizedKeys = dictionary.keys.map { $0.lowercased() }
+            let pathString = path.joined(separator: "/").lowercased()
+
+            let hasPercentKey = normalizedKeys.contains { key in
+                ["utilization", "percent_used", "used_percent", "usage_percent", "usagepct"].contains(key)
+            }
+            let hasUsedKey = normalizedKeys.contains { key in
+                ["used", "consumed", "current"].contains(key)
+            }
+            let hasLimitKey = normalizedKeys.contains { key in
+                ["limit", "max", "quota", "total"].contains(key)
+            }
+            let hasRemainingKey = normalizedKeys.contains { key in
+                ["remaining", "left"].contains(key)
+            }
+            let hasResetKey = normalizedKeys.contains { key in
+                key.contains("reset") || key.contains("expires")
+            }
+            let hasNameKey = normalizedKeys.contains { key in
+                ["label", "name", "title", "slug", "model", "model_slug"].contains(key)
+            }
+            let hasUsageContext = pathString.contains("usage")
+                || pathString.contains("limit")
+                || pathString.contains("quota")
+                || pathString.contains("window")
+                || pathString.contains("token")
+                || pathString.contains("credit")
+
+            let hasUtilizationShape = hasPercentKey || ((hasUsedKey || hasRemainingKey) && hasLimitKey)
+
+            // Keep parser away from pricing config objects that carry numbers but are not usage counters.
+            let looksLikePricing = normalizedKeys.contains(where: { key in
+                key.contains("price") || key.contains("amount") || key.contains("currency_symbol")
+            })
+
+            if looksLikePricing && !hasUtilizationShape {
+                return false
+            }
+
+            if hasUtilizationShape && (hasUsageContext || hasResetKey || hasNameKey) {
+                return true
+            }
+
+            return false
         }
 
         private func firstNumber(in dictionary: [String: Any], keys: [String]) -> Double? {
