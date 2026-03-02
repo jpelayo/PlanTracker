@@ -5,7 +5,7 @@
 
 import Foundation
 
-struct UsageData: Sendable, Equatable {
+struct UsageData: Codable, Sendable, Equatable {
     let fiveHourUtilization: Double?
     let fiveHourResetsAt: Date?
     let sevenDayUtilization: Double?

@@ -14,7 +14,7 @@ actor ClaudeAPIClient {
         case unauthorized
         case forbidden
         case networkError(Error)
-        case invalidResponse
+        case invalidResponse(endpoint: String, statusCode: Int?, bodyPreview: String?)
         case decodingError(Error)
         case noSessionKey
 
@@ -26,8 +26,12 @@ actor ClaudeAPIClient {
                 "Access denied. Please log in again."
             case .networkError(let error):
                 "Network error: \(error.localizedDescription)"
-            case .invalidResponse:
-                "Invalid response from server."
+            case .invalidResponse(let endpoint, let statusCode, _):
+                if let statusCode {
+                    "Invalid response from server for \(endpoint) (HTTP \(statusCode))."
+                } else {
+                    "Invalid response from server for \(endpoint)."
+                }
             case .decodingError(let error):
                 "Failed to parse response: \(error.localizedDescription)"
             case .noSessionKey:
@@ -37,11 +41,16 @@ actor ClaudeAPIClient {
     }
 
     init() {
-        let config = URLSessionConfiguration.default
+        let config = URLSessionConfiguration.ephemeral
         config.httpAdditionalHeaders = [
             "Accept": "application/json",
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15"
         ]
+        config.httpShouldSetCookies = false
+        config.httpCookieStorage = nil
+        config.httpCookieAcceptPolicy = .never
+        config.urlCache = nil
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
         self.session = URLSession(configuration: config)
     }
 
@@ -138,10 +147,22 @@ actor ClaudeAPIClient {
     }
 
     private func performRequest(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let activity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiatedAllowingIdleSystemSleep],
+            reason: "PlanTracker Claude API Request"
+        )
+        defer {
+            ProcessInfo.processInfo.endActivity(activity)
+        }
+
         do {
             let (data, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
-                throw APIError.invalidResponse
+                throw APIError.invalidResponse(
+                    endpoint: request.url?.path ?? "unknown",
+                    statusCode: nil,
+                    bodyPreview: preview(of: data)
+                )
             }
             print("[ClaudeAPIClient] Response status: \(httpResponse.statusCode)")
             return (data, httpResponse)
@@ -169,7 +190,14 @@ actor ClaudeAPIClient {
         case 403:
             throw APIError.forbidden
         default:
-            throw APIError.invalidResponse
+            let endpoint = response.url?.path ?? "unknown"
+            let preview = preview(of: data)
+            print("[ClaudeAPIClient] Invalid response for \(endpoint) status=\(response.statusCode) body=\(preview ?? "nil")")
+            throw APIError.invalidResponse(
+                endpoint: endpoint,
+                statusCode: response.statusCode,
+                bodyPreview: preview
+            )
         }
     }
 
@@ -186,8 +214,26 @@ actor ClaudeAPIClient {
         case 403:
             throw APIError.forbidden
         default:
-            throw APIError.invalidResponse
+            let endpoint = response.url?.path ?? "unknown"
+            let preview = preview(of: data)
+            print("[ClaudeAPIClient] Invalid JSON response for \(endpoint) status=\(response.statusCode) body=\(preview ?? "nil")")
+            throw APIError.invalidResponse(
+                endpoint: endpoint,
+                statusCode: response.statusCode,
+                bodyPreview: preview
+            )
         }
+    }
+
+    private func preview(of data: Data, limit: Int = 240) -> String? {
+        guard !data.isEmpty, let raw = String(data: data, encoding: .utf8) else { return nil }
+        let trimmed = raw.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.count <= limit {
+            return trimmed
+        }
+        let endIndex = trimmed.index(trimmed.startIndex, offsetBy: limit)
+        return String(trimmed[..<endIndex]) + "..."
     }
 }
 

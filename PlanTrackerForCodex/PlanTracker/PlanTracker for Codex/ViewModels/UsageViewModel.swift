@@ -24,6 +24,9 @@ final class UsageViewModel {
     private(set) var errorMessage: String?
     private(set) var lastUpdated: Date?
     private(set) var isDemoMode = false
+    private let snapshotStore = PersistedUsageSnapshotStore()
+    private var observerTokens: [NSObjectProtocol] = []
+    private var pollingRecoveryTask: Task<Void, Never>?
 
     var pollingIntervalMinutes: Int = 5 {
         didSet {
@@ -94,6 +97,14 @@ final class UsageViewModel {
         self.pollingService = UsagePollingService(apiClient: apiClient)
         self.cookieManager = WebViewCookieManager()
 
+        let launchState = AppRuntimeState.beginLaunchIfNeeded()
+        if launchState.wasUnexpectedTermination {
+            let launchDescription = launchState.previousLaunchDate?.description ?? "unknown"
+            print("[UsageViewModel] Detected unexpected previous termination. Last launch: \(launchDescription)")
+            AppRuntimeState.recordBreadcrumb("unexpected-termination-detected")
+        }
+        CacheJanitor.prepareForLaunch()
+
         let stored = UserDefaults.standard.integer(forKey: "pollingIntervalMinutes")
         if stored > 0 {
             self.pollingIntervalMinutes = Swift.min(Swift.max(stored, 1), 60)
@@ -125,7 +136,9 @@ final class UsageViewModel {
             self.sessionResetHour = storedResetHour
         }
 
+        restorePersistedSnapshot()
         setupPollingCallbacks()
+        observeLifecycleNotifications()
     }
 
     private func applyLanguage() {
@@ -154,6 +167,9 @@ final class UsageViewModel {
                                 resetHour: self?.sessionResetHour ?? 4
                             )
                         }
+                        self?.persistUsageSnapshot()
+                        CacheJanitor.cleanupTransientCaches(reason: "usage-update")
+                        AppRuntimeState.recordHeartbeat(reason: "usage-update")
                     }
                 },
                 onError: { [weak self] error in
@@ -166,15 +182,29 @@ final class UsageViewModel {
         }
     }
 
+    private func observeLifecycleNotifications() {
+        let center = NotificationCenter.default
+        observerTokens.append(
+            center.addObserver(forName: .planTrackerMemoryPressure, object: nil, queue: .main) { [weak self] notification in
+                guard let level = notification.object as? AppMemoryPressureLevel else { return }
+                Task { @MainActor in
+                    await self?.handleMemoryPressure(level)
+                }
+            }
+        )
+    }
+
     func checkAuthentication() async {
         isLoading = true
         authState = .unknown
+        AppRuntimeState.recordBreadcrumb("check-authentication")
 
         // First, check if we have stored credentials in Keychain
         let state = await authService.checkStoredCredentials()
 
         if state.isAuthenticated {
             print("[UsageViewModel] Found valid session in Keychain")
+            AppRuntimeState.recordBreadcrumb("auth-restored-keychain")
             authState = state
             await startPolling()
             isLoading = false
@@ -185,12 +215,14 @@ final class UsageViewModel {
         print("[UsageViewModel] No Keychain session, checking WebView cookies...")
         if let cookieString = await cookieManager.extractSessionCookies() {
             print("[UsageViewModel] Found WebView cookies, validating...")
+            AppRuntimeState.recordBreadcrumb("auth-restored-webview")
             await handleLoginSuccess(sessionCookies: cookieString)
             isLoading = false
             return
         }
 
         print("[UsageViewModel] No valid session found")
+        AppRuntimeState.recordBreadcrumb("auth-missing")
         authState = .unauthenticated
         isLoading = false
     }
@@ -203,6 +235,7 @@ final class UsageViewModel {
             try await authService.saveSessionCookies(sessionCookies)
             let email = try await authService.validateSession()
             print("[UsageViewModel] Login validated, email: \(email)")
+            AppRuntimeState.recordBreadcrumb("login-success")
             authState = .authenticated(email: email)
             await startPolling()
             isLoading = false
@@ -218,6 +251,8 @@ final class UsageViewModel {
 
     func logout() async {
         print("[UsageViewModel] Logging out...")
+        AppRuntimeState.recordBreadcrumb("logout")
+        pollingRecoveryTask?.cancel()
         await pollingService.stopPolling()
         try? await authService.clearCredentials()
 
@@ -228,11 +263,14 @@ final class UsageViewModel {
         usageData = .empty
         lastUpdated = nil
         errorMessage = nil
+        snapshotStore.clear()
+        CacheJanitor.cleanupTransientCaches(reason: "logout")
         print("[UsageViewModel] Logged out successfully")
     }
 
     func refreshUsage() async {
         guard authState.isAuthenticated else { return }
+        AppRuntimeState.recordBreadcrumb("manual-refresh")
         isLoading = true
         await pollingService.fetchUsage()
         isLoading = false
@@ -277,11 +315,14 @@ final class UsageViewModel {
         lastUpdated = now
         errorMessage = nil
         sessionTracker.setMockAccumulated(83 * 60) // 1h 23m
+        persistUsageSnapshot()
         print("[UsageViewModel] Demo mode activated successfully")
     }
 
     private func startPolling() async {
         print("[UsageViewModel] Starting polling...")
+        AppRuntimeState.recordBreadcrumb("start-polling")
+        pollingRecoveryTask?.cancel()
         let interval = TimeInterval(pollingIntervalMinutes * 60)
         await pollingService.setPollingInterval(interval)
         await pollingService.startPolling()
@@ -306,10 +347,107 @@ final class UsageViewModel {
                 }
                 errorMessage = apiError.errorDescription
             default:
-                errorMessage = apiError.errorDescription
+                setNonCriticalErrorMessage(apiError.errorDescription)
             }
         } else {
-            errorMessage = error.localizedDescription
+            setNonCriticalErrorMessage(error.localizedDescription)
         }
+    }
+
+    private func setNonCriticalErrorMessage(_ message: String?) {
+        guard shouldShowNonCriticalError else {
+            errorMessage = nil
+            if let message {
+                print("[UsageViewModel] Suppressed non-critical error banner: \(message)")
+            }
+            return
+        }
+        errorMessage = message
+    }
+
+    private var shouldShowNonCriticalError: Bool {
+        if case .authenticating = authState {
+            return true
+        }
+        return usageData == .empty && lastUpdated == nil
+    }
+
+    private func handleMemoryPressure(_ level: AppMemoryPressureLevel) async {
+        print("[UsageViewModel] Memory pressure event: \(level.rawValue)")
+        AppRuntimeState.recordBreadcrumb("view-model-memory-pressure-\(level.rawValue)")
+
+        persistUsageSnapshot()
+        sessionTracker.persist()
+        CacheJanitor.cleanupTransientCaches(reason: "memory-pressure-\(level.rawValue)")
+
+        guard authState.isAuthenticated else { return }
+
+        if level == .critical {
+            await pollingService.stopPolling()
+            schedulePollingRecovery(after: 120)
+        }
+    }
+
+    private func schedulePollingRecovery(after delay: TimeInterval) {
+        pollingRecoveryTask?.cancel()
+        pollingRecoveryTask = Task { [weak self] in
+            let nanoseconds = UInt64(delay * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            await self?.resumePollingAfterPressure()
+        }
+    }
+
+    private func resumePollingAfterPressure() async {
+        guard authState.isAuthenticated else { return }
+        AppRuntimeState.recordBreadcrumb("resume-polling-after-pressure")
+        await startPolling()
+    }
+
+    private func restorePersistedSnapshot() {
+        guard let snapshot = snapshotStore.load() else { return }
+        usageData = snapshot.usageData
+        lastUpdated = snapshot.lastUpdated
+        print("[UsageViewModel] Restored persisted usage snapshot from \(snapshot.savedAt)")
+        AppRuntimeState.recordBreadcrumb("snapshot-restored")
+    }
+
+    private func persistUsageSnapshot() {
+        snapshotStore.save(usageData: usageData, lastUpdated: lastUpdated)
+    }
+}
+
+private struct PersistedUsageSnapshot: Codable {
+    let usageData: UsageData
+    let lastUpdated: Date?
+    let savedAt: Date
+}
+
+private struct PersistedUsageSnapshotStore {
+    private let defaults = UserDefaults.standard
+    private let key = "persistedUsageSnapshot.v1"
+
+    func load() -> PersistedUsageSnapshot? {
+        guard let data = defaults.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(PersistedUsageSnapshot.self, from: data)
+    }
+
+    func save(usageData: UsageData, lastUpdated: Date?) {
+        guard usageData != .empty else {
+            clear()
+            return
+        }
+
+        let snapshot = PersistedUsageSnapshot(
+            usageData: usageData,
+            lastUpdated: lastUpdated,
+            savedAt: Date()
+        )
+
+        guard let data = try? JSONEncoder().encode(snapshot) else { return }
+        defaults.set(data, forKey: key)
+    }
+
+    func clear() {
+        defaults.removeObject(forKey: key)
     }
 }
