@@ -26,6 +26,7 @@
 /* Settings */
 "General" = "General";
 "Launch at login" = "Abrir al iniciar sesión";
+"When enabled, PlanTracker starts at login and quietly restores itself if macOS closes it unexpectedly." = "Cuando está activado, PlanTracker se inicia al iniciar sesión y se restaura discretamente si macOS lo cierra inesperadamente.";
 "Change language" = "Cambiar idioma";
 "(requires app restart)" = "(requiere reiniciar la app)";
 "System" = "Sistema";

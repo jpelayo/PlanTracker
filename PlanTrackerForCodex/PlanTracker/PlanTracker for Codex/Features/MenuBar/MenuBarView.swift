@@ -284,25 +284,12 @@ struct MenuBarView: View {
 
             Divider()
 
-            Button(role: .destructive) {
-                Task {
-                    await viewModel.logout()
-                }
-            } label: {
-                HStack {
-                    Label(String(localized: "Sign Out"), systemImage: "rectangle.portrait.and.arrow.right")
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            launchAtLoginRow
 
             Divider()
 
             Button {
+                AppRuntimeState.prepareForUserInitiatedTermination(reason: "quit")
                 NSApp.terminate(nil)
             } label: {
                 HStack {
@@ -363,6 +350,10 @@ struct MenuBarView: View {
             .buttonStyle(.plain)
             .padding(.horizontal)
 
+            Divider()
+
+            launchAtLoginRow
+
             Button {
                 showAbout.toggle()
             } label: {
@@ -404,6 +395,7 @@ struct MenuBarView: View {
             }
 
             Button {
+                AppRuntimeState.prepareForUserInitiatedTermination(reason: "quit")
                 NSApp.terminate(nil)
             } label: {
                 HStack {
@@ -417,6 +409,21 @@ struct MenuBarView: View {
             .padding(.horizontal)
         }
         .padding()
+    }
+
+    private var launchAtLoginRow: some View {
+        HStack {
+            Label(String(localized: "Launch at login"), systemImage: "power.circle")
+            Spacer()
+            Toggle("", isOn: $viewModel.launchAtLogin)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .padding(.horizontal)
+        .padding(.vertical, 8)
     }
 
     private func colorForUtilization(_ utilization: Double) -> Color {

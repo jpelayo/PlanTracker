@@ -58,17 +58,14 @@ final class SessionTracker {
             noChangeCount = 0
             if sessionStartTime == nil {
                 sessionStartTime = now
-                print("[SessionTracker] Session started")
             }
         } else if sessionStartTime != nil {
             // No change and session is active
             noChangeCount += 1
-            print("[SessionTracker] No change count: \(noChangeCount)")
             if noChangeCount >= 2 {
                 // End session
                 if let start = sessionStartTime {
                     accumulatedSeconds += now.timeIntervalSince(start)
-                    print("[SessionTracker] Session ended, accumulated: \(accumulatedSeconds)s")
                 }
                 sessionStartTime = nil
                 noChangeCount = 0
@@ -98,7 +95,6 @@ final class SessionTracker {
         guard let todayReset = calendar.date(from: components) else { return }
         guard now >= todayReset && lastResetDate < todayReset else { return }
 
-        print("[SessionTracker] Daily reset triggered at hour \(resetHour)")
         accumulatedSeconds = 0
         sessionStartTime = nil
         noChangeCount = 0
@@ -133,6 +129,5 @@ final class SessionTracker {
 
         // Do NOT restore sessionStartTime — treat restart as implicit session end
         sessionStartTime = nil
-        print("[SessionTracker] Loaded: accumulated=\(accumulatedSeconds)s, lastReset=\(lastResetDate)")
     }
 }

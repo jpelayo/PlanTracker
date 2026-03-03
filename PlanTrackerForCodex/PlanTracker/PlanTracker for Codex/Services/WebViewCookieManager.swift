@@ -19,11 +19,6 @@ actor WebViewCookieManager {
                         || cookie.domain.contains("chat.openai.com")
                     }
 
-                    print("[WebViewCookieManager] Found \(openAICookies.count) OpenAI cookies")
-                    for cookie in openAICookies {
-                        print("  - \(cookie.name)")
-                    }
-
                     guard !openAICookies.isEmpty else {
                         continuation.resume(returning: nil)
                         return
@@ -36,7 +31,6 @@ actor WebViewCookieManager {
                             || name.contains("token")
                     }
                     guard hasLikelyAuthCookie else {
-                        print("[WebViewCookieManager] No auth-like OpenAI cookies found")
                         continuation.resume(returning: nil)
                         return
                     }
@@ -81,7 +75,6 @@ actor WebViewCookieManager {
                                 || $0.displayName.contains("chat.openai.com")
                             }
                             dataStore.removeData(ofTypes: dataTypes, for: openAIRecords) {
-                                print("[WebViewCookieManager] Cleared all OpenAI session data")
                                 continuation.resume()
                             }
                         }

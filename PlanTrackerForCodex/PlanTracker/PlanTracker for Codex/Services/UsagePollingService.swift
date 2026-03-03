@@ -8,7 +8,10 @@ import Foundation
 actor UsagePollingService {
     private let apiClient: OpenAIAPIClient
     private var pollingTask: Task<Void, Never>?
-    private var pollingInterval: TimeInterval = 300 // 5 minutes default
+    private var pollingInterval: TimeInterval = 300
+    private var cachedPlanTier: PlanTier = .unknown
+    private var lastMetadataRefreshAt: Date?
+    private var metadataRefreshInterval: TimeInterval = 6 * 3600
 
     private var onUsageUpdate: (@Sendable (UsageData) -> Void)?
     private var onError: (@Sendable (Error) -> Void)?
@@ -45,30 +48,41 @@ actor UsagePollingService {
         pollingTask = nil
     }
 
-    func fetchUsage() async {
+    func resetSteadyState() {
+        cachedPlanTier = .unknown
+        lastMetadataRefreshAt = nil
+        metadataRefreshInterval = 6 * 3600
+    }
+
+    func handleMemoryPressure(_ level: AppMemoryPressureLevel) {
+        switch level {
+        case .warning:
+            metadataRefreshInterval = max(metadataRefreshInterval, 12 * 3600)
+        case .critical:
+            metadataRefreshInterval = max(metadataRefreshInterval, 24 * 3600)
+        }
+    }
+
+    func fetchUsage(forceMetadataRefresh: Bool = false) async {
         do {
-            let usageData = try await fetchUsageData()
+            let usageData = try await fetchUsageData(forceMetadataRefresh: forceMetadataRefresh)
             onUsageUpdate?(usageData)
         } catch {
-            print("[UsagePollingService] Error fetching usage: \(error)")
             onError?(error)
         }
     }
 
-    private func fetchUsageData() async throws -> UsageData {
-        async let profileTask = apiClient.fetchMeProfile()
-        async let snapshotTask = apiClient.fetchUsageSnapshot()
+    private func fetchUsageData(forceMetadataRefresh: Bool) async throws -> UsageData {
+        let shouldRefreshMetadata = forceMetadataRefresh || metadataIsStale()
+        async let snapshotTask = apiClient.fetchUsageSnapshot(includeMetadataEndpoints: shouldRefreshMetadata)
+        async let profileTask: OpenAIMeProfile? = shouldRefreshMetadata ? try? await apiClient.fetchMeProfile(forceRefresh: forceMetadataRefresh) : nil
 
         let snapshot = try await snapshotTask
-        let profile = try? await profileTask
+        let profile = await profileTask
 
         let planLabel = profile?.planLabel ?? snapshot.planLabel
-        let planTier = determinePlanTier(from: planLabel)
+        let planTier = resolvePlanTier(from: planLabel, refreshedMetadata: shouldRefreshMetadata)
         let slots = mapLimitsToSlots(snapshot.limits)
-
-        for limit in snapshot.limits.prefix(8) {
-            print("[UsagePollingService] limit: \(limit.name) util=\(Int(limit.utilization)) reset=\(String(describing: limit.resetsAt))")
-        }
 
         return UsageData(
             fiveHourUtilization: slots.first?.utilization,
@@ -95,6 +109,27 @@ actor UsagePollingService {
             overageEnabled: nil,
             overageOutOfCredits: nil
         )
+    }
+
+    private func metadataIsStale() -> Bool {
+        guard let lastMetadataRefreshAt else { return true }
+        return Date().timeIntervalSince(lastMetadataRefreshAt) >= metadataRefreshInterval
+    }
+
+    private func resolvePlanTier(from planLabel: String?, refreshedMetadata: Bool) -> PlanTier {
+        let resolved = determinePlanTier(from: planLabel)
+        if resolved != .unknown {
+            cachedPlanTier = resolved
+            if refreshedMetadata {
+                lastMetadataRefreshAt = Date()
+            }
+            return resolved
+        }
+
+        if refreshedMetadata {
+            lastMetadataRefreshAt = Date()
+        }
+        return cachedPlanTier
     }
 
     private func mapLimitsToSlots(_ limits: [OpenAIUsageLimit]) -> (

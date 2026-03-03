@@ -10,23 +10,16 @@ import ServiceManagement
 @MainActor
 @Observable
 final class UsageViewModel {
-    private(set) var authState: AuthState = .unknown {
-        didSet {
-            print("[UsageViewModel] authState changed to: \(authState)")
-        }
-    }
-    private(set) var usageData: UsageData = .empty {
-        didSet {
-            print("[UsageViewModel] usageData changed - plan: \(usageData.planTier)")
-        }
-    }
+    private(set) var authState: AuthState = .unknown
+    private(set) var usageData: UsageData = .empty
     private(set) var isLoading = false
     private(set) var errorMessage: String?
     private(set) var lastUpdated: Date?
     private(set) var isDemoMode = false
     private let snapshotStore = PersistedUsageSnapshotStore()
     private var observerTokens: [NSObjectProtocol] = []
-    private var pollingRecoveryTask: Task<Void, Never>?
+    private let loginItemService = SMAppService.loginItem(identifier: LoginItemConfiguration.helperBundleIdentifier)
+    private var isApplyingLaunchAtLoginState = false
 
     var pollingIntervalMinutes: Int = 5 {
         didSet {
@@ -45,14 +38,10 @@ final class UsageViewModel {
 
     var launchAtLogin: Bool = false {
         didSet {
-            do {
-                if launchAtLogin {
-                    try SMAppService.mainApp.register()
-                } else {
-                    try SMAppService.mainApp.unregister()
-                }
-            } catch {
-                print("[UsageViewModel] Failed to update login item: \(error)")
+            guard !isApplyingLaunchAtLoginState else { return }
+            let requestedValue = launchAtLogin
+            Task { @MainActor [weak self] in
+                await self?.applyLaunchAtLoginChange(requestedValue)
             }
         }
     }
@@ -99,8 +88,6 @@ final class UsageViewModel {
 
         let launchState = AppRuntimeState.beginLaunchIfNeeded()
         if launchState.wasUnexpectedTermination {
-            let launchDescription = launchState.previousLaunchDate?.description ?? "unknown"
-            print("[UsageViewModel] Detected unexpected previous termination. Last launch: \(launchDescription)")
             AppRuntimeState.recordBreadcrumb("unexpected-termination-detected")
         }
         CacheJanitor.prepareForLaunch()
@@ -114,7 +101,7 @@ final class UsageViewModel {
             self.showRemainingPercent = UserDefaults.standard.bool(forKey: "showRemainingPercent")
         }
 
-        self.launchAtLogin = SMAppService.mainApp.status == .enabled
+        syncLaunchAtLoginFromSystem()
 
         if let storedLanguage = UserDefaults.standard.string(forKey: "appLanguage"),
            let language = AppLanguage(rawValue: storedLanguage) {
@@ -149,31 +136,56 @@ final class UsageViewModel {
         }
     }
 
+    private func syncLaunchAtLoginFromSystem() {
+        setLaunchAtLogin(loginItemService.status.isEnabledForUI)
+        LoginItemSharedState.setHelperEnabled(launchAtLogin)
+    }
+
+    private func setLaunchAtLogin(_ isEnabled: Bool) {
+        isApplyingLaunchAtLoginState = true
+        launchAtLogin = isEnabled
+        isApplyingLaunchAtLoginState = false
+    }
+
+    private func applyLaunchAtLoginChange(_ isEnabled: Bool) async {
+        LoginItemSharedState.setHelperEnabled(isEnabled)
+        do {
+            if isEnabled {
+                try loginItemService.register()
+            } else {
+                try await loginItemService.unregister()
+            }
+            syncLaunchAtLoginFromSystem()
+        } catch {
+            syncLaunchAtLoginFromSystem()
+        }
+    }
+
     private func setupPollingCallbacks() {
         Task {
             await pollingService.setCallbacks(
                 onUsageUpdate: { [weak self] usage in
-                    print("[UsageViewModel] Callback received usage update")
                     Task { @MainActor in
-                        self?.usageData = usage
-                        self?.lastUpdated = Date()
-                        self?.errorMessage = nil
-                        if self?.trackSessionTime == true {
-                            self?.sessionTracker.processTick(
+                        guard let self else { return }
+                        let usageChanged = self.usageData != usage
+                        self.usageData = usage
+                        self.lastUpdated = Date()
+                        self.errorMessage = nil
+                        if self.trackSessionTime {
+                            self.sessionTracker.processTick(
                                 fiveHourUtilization: usage.fiveHourUtilization,
                                 prepaidCreditsRemaining: usage.prepaidCreditsRemaining,
                                 overageUsedCredits: usage.overageUsedCredits,
-                                minInterval: TimeInterval((self?.sessionCheckIntervalMinutes ?? 5) * 60),
-                                resetHour: self?.sessionResetHour ?? 4
+                                minInterval: TimeInterval(self.sessionCheckIntervalMinutes * 60),
+                                resetHour: self.sessionResetHour
                             )
                         }
-                        self?.persistUsageSnapshot()
-                        CacheJanitor.cleanupTransientCaches(reason: "usage-update")
-                        AppRuntimeState.recordHeartbeat(reason: "usage-update")
+                        if usageChanged {
+                            self.persistUsageSnapshot()
+                        }
                     }
                 },
                 onError: { [weak self] error in
-                    print("[UsageViewModel] Callback received error: \(error)")
                     Task { @MainActor in
                         self?.handleError(error)
                     }
@@ -200,7 +212,6 @@ final class UsageViewModel {
         AppRuntimeState.recordBreadcrumb("check-authentication")
 
         if let restoredSession = await authService.restoreStoredSession() {
-            print("[UsageViewModel] Restored session key from Keychain")
             AppRuntimeState.recordBreadcrumb("auth-restored-keychain")
             authState = .restoring(email: restoredSession.email)
             errorMessage = nil
@@ -212,17 +223,13 @@ final class UsageViewModel {
             return
         }
 
-        // If no Keychain credentials, check WebView cookies
-        print("[UsageViewModel] No Keychain session, checking WebView cookies...")
         if let cookieString = await cookieManager.extractSessionCookies() {
-            print("[UsageViewModel] Found WebView cookies, validating...")
             AppRuntimeState.recordBreadcrumb("auth-restored-webview")
             await handleLoginSuccess(sessionKey: cookieString)
             isLoading = false
             return
         }
 
-        print("[UsageViewModel] No valid session found")
         AppRuntimeState.recordBreadcrumb("auth-missing")
         authState = .unauthenticated
         isLoading = false
@@ -232,20 +239,16 @@ final class UsageViewModel {
         do {
             let email = try await authService.refreshCachedIdentity()
             guard authState.isAuthenticated else { return }
-            print("[UsageViewModel] Refreshed restored identity, email: \(email)")
             AppRuntimeState.recordBreadcrumb("auth-identity-refreshed")
             authState = .authenticated(email: email)
         } catch let error as ClaudeAPIClient.APIError {
             switch error {
             case .unauthorized, .forbidden:
-                print("[UsageViewModel] Restored session rejected: \(error)")
                 handleError(error)
             default:
-                print("[UsageViewModel] Deferred identity refresh failed: \(error)")
+                break
             }
-        } catch {
-            print("[UsageViewModel] Deferred identity refresh failed: \(error)")
-        }
+        } catch {}
     }
 
     func handleLoginSuccess(sessionKey: String) async {
@@ -255,12 +258,10 @@ final class UsageViewModel {
         do {
             try await authService.saveSessionKey(sessionKey)
             let email = try await authService.validateSession()
-            print("[UsageViewModel] Login validated, email: \(email)")
             AppRuntimeState.recordBreadcrumb("login-success")
             authState = .authenticated(email: email)
             await startPolling()
         } catch {
-            print("[UsageViewModel] Login validation failed: \(error)")
             handleError(error)
             authState = .unauthenticated
         }
@@ -269,10 +270,9 @@ final class UsageViewModel {
     }
 
     func logout() async {
-        print("[UsageViewModel] Logging out...")
         AppRuntimeState.recordBreadcrumb("logout")
-        pollingRecoveryTask?.cancel()
         await pollingService.stopPolling()
+        await pollingService.resetSteadyState()
         try? await authService.clearCredentials()
 
         // Also clear WebView cookies
@@ -284,19 +284,17 @@ final class UsageViewModel {
         errorMessage = nil
         snapshotStore.clear()
         CacheJanitor.cleanupTransientCaches(reason: "logout")
-        print("[UsageViewModel] Logged out successfully")
     }
 
     func refreshUsage() async {
         guard authState.isAuthenticated else { return }
         AppRuntimeState.recordBreadcrumb("manual-refresh")
         isLoading = true
-        await pollingService.fetchUsage()
+        await pollingService.fetchUsage(forceMetadataRefresh: true)
         isLoading = false
     }
 
     func activateDemoMode() {
-        print("[UsageViewModel] Activating demo mode...")
         isDemoMode = true
         authState = .authenticated(email: "demo@example.com")
 
@@ -332,13 +330,10 @@ final class UsageViewModel {
         errorMessage = nil
         sessionTracker.setMockAccumulated(83 * 60) // 1h 23m
         persistUsageSnapshot()
-        print("[UsageViewModel] Demo mode activated successfully")
     }
 
     private func startPolling() async {
-        print("[UsageViewModel] Starting polling...")
         AppRuntimeState.recordBreadcrumb("start-polling")
-        pollingRecoveryTask?.cancel()
         let interval = TimeInterval(pollingIntervalMinutes * 60)
         await pollingService.setPollingInterval(interval)
         await pollingService.startPolling()
@@ -373,9 +368,6 @@ final class UsageViewModel {
     private func setNonCriticalErrorMessage(_ message: String?) {
         guard shouldShowNonCriticalError else {
             errorMessage = nil
-            if let message {
-                print("[UsageViewModel] Suppressed non-critical error banner: \(message)")
-            }
             return
         }
         errorMessage = message
@@ -389,41 +381,16 @@ final class UsageViewModel {
     }
 
     private func handleMemoryPressure(_ level: AppMemoryPressureLevel) async {
-        print("[UsageViewModel] Memory pressure event: \(level.rawValue)")
         AppRuntimeState.recordBreadcrumb("view-model-memory-pressure-\(level.rawValue)")
 
-        persistUsageSnapshot()
-        sessionTracker.persist()
-        CacheJanitor.cleanupTransientCaches(reason: "memory-pressure-\(level.rawValue)")
-
         guard authState.isAuthenticated else { return }
-
-        if level == .critical {
-            await pollingService.stopPolling()
-            schedulePollingRecovery(after: 120)
-        }
-    }
-
-    private func schedulePollingRecovery(after delay: TimeInterval) {
-        pollingRecoveryTask?.cancel()
-        pollingRecoveryTask = Task { [weak self] in
-            let nanoseconds = UInt64(delay * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: nanoseconds)
-            await self?.resumePollingAfterPressure()
-        }
-    }
-
-    private func resumePollingAfterPressure() async {
-        guard authState.isAuthenticated else { return }
-        AppRuntimeState.recordBreadcrumb("resume-polling-after-pressure")
-        await startPolling()
+        await pollingService.handleMemoryPressure(level)
     }
 
     private func restorePersistedSnapshot() {
         guard let snapshot = snapshotStore.load() else { return }
         usageData = snapshot.usageData
         lastUpdated = snapshot.lastUpdated
-        print("[UsageViewModel] Restored persisted usage snapshot from \(snapshot.savedAt)")
         AppRuntimeState.recordBreadcrumb("snapshot-restored")
     }
 

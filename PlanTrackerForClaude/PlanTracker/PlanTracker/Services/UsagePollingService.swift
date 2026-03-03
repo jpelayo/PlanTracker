@@ -6,9 +6,36 @@
 import Foundation
 
 actor UsagePollingService {
+    private enum PollingError: Error {
+        case organizationUnavailable
+    }
+
+    private struct OrganizationContext: Sendable {
+        let orgUuid: String
+        let planTier: PlanTier
+        let refreshedAt: Date
+    }
+
+    private struct BillingSnapshot: Sendable {
+        let prepaidCreditsRemaining: Int?
+        let prepaidCreditsTotal: Int?
+        let prepaidCreditsCurrency: String?
+        let prepaidAutoReloadEnabled: Bool?
+        let overageMonthlyLimit: Int?
+        let overageUsedCredits: Int?
+        let overageCurrency: String?
+        let overageEnabled: Bool?
+        let overageOutOfCredits: Bool?
+        let refreshedAt: Date
+    }
+
     private let apiClient: ClaudeAPIClient
     private var pollingTask: Task<Void, Never>?
-    private var pollingInterval: TimeInterval = 300 // 5 minutes default
+    private var pollingInterval: TimeInterval = 300
+    private var organizationContext: OrganizationContext?
+    private var billingSnapshot: BillingSnapshot?
+    private var organizationRefreshInterval: TimeInterval = 6 * 3600
+    private var billingRefreshInterval: TimeInterval = 3600
 
     private var onUsageUpdate: (@Sendable (UsageData) -> Void)?
     private var onError: (@Sendable (Error) -> Void)?
@@ -26,7 +53,7 @@ actor UsagePollingService {
     }
 
     func setPollingInterval(_ interval: TimeInterval) {
-        self.pollingInterval = Swift.max(60, interval) // Minimum 1 minute
+        pollingInterval = Swift.max(60, interval)
     }
 
     func startPolling() {
@@ -45,78 +72,57 @@ actor UsagePollingService {
         pollingTask = nil
     }
 
-    func fetchUsage() async {
+    func resetSteadyState() {
+        organizationContext = nil
+        billingSnapshot = nil
+        billingRefreshInterval = 3600
+    }
+
+    func handleMemoryPressure(_ level: AppMemoryPressureLevel) {
+        switch level {
+        case .warning:
+            billingRefreshInterval = max(billingRefreshInterval, 2 * 3600)
+        case .critical:
+            billingRefreshInterval = max(billingRefreshInterval, 6 * 3600)
+        }
+    }
+
+    func fetchUsage(forceMetadataRefresh: Bool = false) async {
         do {
-            let usageData = try await fetchUsageData()
+            let usageData = try await fetchUsageData(forceMetadataRefresh: forceMetadataRefresh)
             onUsageUpdate?(usageData)
         } catch {
-            print("[UsagePollingService] Error fetching usage: \(error)")
             onError?(error)
         }
     }
 
-    private func fetchUsageData() async throws -> UsageData {
-        // Get organizations to find the org UUID and plan tier
-        let organizations = try await apiClient.fetchOrganizations()
+    private func fetchUsageData(forceMetadataRefresh: Bool) async throws -> UsageData {
+        let organization = try await resolveOrganizationContext(forceRefresh: forceMetadataRefresh)
+        let usage = try await apiClient.fetchUsage(orgUuid: organization.orgUuid)
+        let billing = try await resolveBillingSnapshot(
+            orgUuid: organization.orgUuid,
+            forceRefresh: forceMetadataRefresh
+        )
 
-        guard let org = organizations.first, let orgUuid = org.uuid else {
-            print("[UsagePollingService] No organization found")
-            return .empty
-        }
-
-        let planTier = determinePlanTier(from: organizations)
-        print("[UsagePollingService] Plan tier: \(planTier), Org UUID: \(orgUuid)")
-
-        // Fetch usage data
-        let usage = try await apiClient.fetchUsage(orgUuid: orgUuid)
-
-        let fiveHourReset = usage.fiveHour?.resetsAt.flatMap { parseDate($0) }
-        let sevenDayReset = usage.sevenDay?.resetsAt.flatMap { parseDate($0) }
-        let sevenDayOpusReset = usage.sevenDayOpus?.resetsAt.flatMap { parseDate($0) }
-        let sevenDaySonnetReset = usage.sevenDaySonnet?.resetsAt.flatMap { parseDate($0) }
-        let extraUsageReset = usage.extraUsage?.resetsAt.flatMap { parseDate($0) }
-
-        print("[UsagePollingService] 5h utilization: \(usage.fiveHour?.utilization ?? -1)%, resets: \(usage.fiveHour?.resetsAt ?? "nil")")
-        print("[UsagePollingService] 7d utilization: \(usage.sevenDay?.utilization ?? -1)%, resets: \(usage.sevenDay?.resetsAt ?? "nil")")
-        print("[UsagePollingService] 7d Opus utilization: \(usage.sevenDayOpus?.utilization ?? -1)%, resets: \(usage.sevenDayOpus?.resetsAt ?? "nil")")
-        print("[UsagePollingService] 7d Sonnet utilization: \(usage.sevenDaySonnet?.utilization ?? -1)%, resets: \(usage.sevenDaySonnet?.resetsAt ?? "nil")")
-        print("[UsagePollingService] Extra usage: \(usage.extraUsage?.utilization ?? -1)%, resets: \(usage.extraUsage?.resetsAt ?? "nil")")
-
-        // Fetch prepaid credits info
-        let prepaidCredits = try? await apiClient.fetchPrepaidCredits(orgUuid: orgUuid)
-        let creditGrant = try? await apiClient.fetchOverageCreditGrant(orgUuid: orgUuid)
-        let overageSpendLimit = try? await apiClient.fetchOverageSpendLimit(orgUuid: orgUuid)
-
-        var prepaidRemaining: Int?
-        var prepaidTotal: Int?
-        var prepaidCurrency: String?
-        var autoReloadEnabled: Bool?
-
-        if let credits = prepaidCredits {
-            prepaidRemaining = credits.amount
-            prepaidCurrency = credits.currency
-            autoReloadEnabled = credits.autoReloadSettings?.enabled ?? false
-            // Only set total when the grant is confirmed, enabling utilization bar
-            if let grant = creditGrant, grant.granted {
-                prepaidTotal = grant.amountMinorUnits
-            }
-            print("[UsagePollingService] Prepaid credits: \(credits.amount) \(credits.currency), total: \(prepaidTotal.map(String.init) ?? "n/a"), Auto-reload: \(autoReloadEnabled ?? false)")
-        }
-
-        if let overage = overageSpendLimit {
-            print("[UsagePollingService] Overage spend limit: \(overage.usedCredits)/\(overage.monthlyCreditLimit) \(overage.currency), enabled: \(overage.isEnabled)")
-        }
+        let fiveHourReset = usage.fiveHour?.resetsAt.flatMap(parseDate)
+        let sevenDayReset = usage.sevenDay?.resetsAt.flatMap(parseDate)
+        let sevenDayOpusReset = usage.sevenDayOpus?.resetsAt.flatMap(parseDate)
+        let sevenDaySonnetReset = usage.sevenDaySonnet?.resetsAt.flatMap(parseDate)
+        let extraUsageReset = usage.extraUsage?.resetsAt.flatMap(parseDate)
 
         let hasMonetaryOverage = {
-            guard let overage = overageSpendLimit else { return false }
-            return overage.monthlyCreditLimit > 0 && overage.usedCredits >= 0 && !overage.currency.isEmpty
+            guard let billing else { return false }
+            guard let monthlyLimit = billing.overageMonthlyLimit,
+                  let usedCredits = billing.overageUsedCredits,
+                  let currency = billing.overageCurrency else {
+                return false
+            }
+            return monthlyLimit > 0 && usedCredits >= 0 && !currency.isEmpty
         }()
 
-        // Backend may send both `extraUsage` and overage/prepaid fields for the same bucket.
-        // Canonicalize to one source: monetary overage/prepaid wins when present.
         let canonicalExtraUsageUtilization = hasMonetaryOverage ? nil : usage.extraUsage?.utilization
         let canonicalExtraUsageReset = hasMonetaryOverage ? nil : extraUsageReset
-        let canonicalOverageEnabled: Bool? = hasMonetaryOverage ? true : overageSpendLimit?.isEnabled
+        let canonicalOverageEnabled: Bool? = hasMonetaryOverage ? true : billing?.overageEnabled
 
         return UsageData(
             fiveHourUtilization: usage.fiveHour?.utilization,
@@ -129,17 +135,96 @@ actor UsagePollingService {
             sevenDaySonnetResetsAt: sevenDaySonnetReset,
             extraUsageUtilization: canonicalExtraUsageUtilization,
             extraUsageResetsAt: canonicalExtraUsageReset,
-            planTier: planTier,
-            prepaidCreditsRemaining: prepaidRemaining,
-            prepaidCreditsTotal: prepaidTotal,
-            prepaidCreditsCurrency: prepaidCurrency,
-            prepaidAutoReloadEnabled: autoReloadEnabled,
-            overageMonthlyLimit: overageSpendLimit?.monthlyCreditLimit,
-            overageUsedCredits: overageSpendLimit?.usedCredits,
-            overageCurrency: overageSpendLimit?.currency,
+            planTier: organization.planTier,
+            prepaidCreditsRemaining: billing?.prepaidCreditsRemaining,
+            prepaidCreditsTotal: billing?.prepaidCreditsTotal,
+            prepaidCreditsCurrency: billing?.prepaidCreditsCurrency,
+            prepaidAutoReloadEnabled: billing?.prepaidAutoReloadEnabled,
+            overageMonthlyLimit: billing?.overageMonthlyLimit,
+            overageUsedCredits: billing?.overageUsedCredits,
+            overageCurrency: billing?.overageCurrency,
             overageEnabled: canonicalOverageEnabled,
-            overageOutOfCredits: overageSpendLimit?.outOfCredits
+            overageOutOfCredits: billing?.overageOutOfCredits
         )
+    }
+
+    private func resolveOrganizationContext(forceRefresh: Bool) async throws -> OrganizationContext {
+        if !forceRefresh,
+           let organizationContext,
+           Date().timeIntervalSince(organizationContext.refreshedAt) < organizationRefreshInterval {
+            return organizationContext
+        }
+
+        do {
+            let organizations = try await apiClient.fetchOrganizations()
+            guard let org = organizations.first, let orgUuid = org.uuid, !orgUuid.isEmpty else {
+                if let organizationContext {
+                    return organizationContext
+                }
+                throw PollingError.organizationUnavailable
+            }
+
+            let resolved = OrganizationContext(
+                orgUuid: orgUuid,
+                planTier: determinePlanTier(from: organizations),
+                refreshedAt: Date()
+            )
+            organizationContext = resolved
+            return resolved
+        } catch {
+            if let organizationContext {
+                return organizationContext
+            }
+            throw error
+        }
+    }
+
+    private func resolveBillingSnapshot(orgUuid: String, forceRefresh: Bool) async throws -> BillingSnapshot? {
+        if !forceRefresh,
+           let billingSnapshot,
+           Date().timeIntervalSince(billingSnapshot.refreshedAt) < billingRefreshInterval {
+            return billingSnapshot
+        }
+
+        do {
+            let prepaidCredits = try await apiClient.fetchPrepaidCredits(orgUuid: orgUuid)
+            let creditGrant = try await apiClient.fetchOverageCreditGrant(orgUuid: orgUuid)
+            let overageSpendLimit = try await apiClient.fetchOverageSpendLimit(orgUuid: orgUuid)
+
+            var prepaidRemaining: Int?
+            var prepaidTotal: Int?
+            var prepaidCurrency: String?
+            var autoReloadEnabled: Bool?
+
+            if let prepaidCredits {
+                prepaidRemaining = prepaidCredits.amount
+                prepaidCurrency = prepaidCredits.currency
+                autoReloadEnabled = prepaidCredits.autoReloadSettings?.enabled ?? false
+                if let creditGrant, creditGrant.granted {
+                    prepaidTotal = creditGrant.amountMinorUnits
+                }
+            }
+
+            let resolved = BillingSnapshot(
+                prepaidCreditsRemaining: prepaidRemaining,
+                prepaidCreditsTotal: prepaidTotal,
+                prepaidCreditsCurrency: prepaidCurrency,
+                prepaidAutoReloadEnabled: autoReloadEnabled,
+                overageMonthlyLimit: overageSpendLimit?.monthlyCreditLimit,
+                overageUsedCredits: overageSpendLimit?.usedCredits,
+                overageCurrency: overageSpendLimit?.currency,
+                overageEnabled: overageSpendLimit?.isEnabled,
+                overageOutOfCredits: overageSpendLimit?.outOfCredits,
+                refreshedAt: Date()
+            )
+            billingSnapshot = resolved
+            return resolved
+        } catch {
+            if let billingSnapshot {
+                return billingSnapshot
+            }
+            throw error
+        }
     }
 
     private func parseDate(_ string: String) -> Date? {

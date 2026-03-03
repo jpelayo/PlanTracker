@@ -87,7 +87,9 @@ enum AppRuntimeState {
     private static let defaults = UserDefaults.standard
     private static let didLaunchCleanlyKey = "appRuntime.didLaunchCleanly"
     private static let lastLaunchDateKey = "appRuntime.lastLaunchDate"
+    private static let lastLaunchTimestampKey = "appRuntime.lastLaunchTimestamp"
     private static let lastHeartbeatDateKey = "appRuntime.lastHeartbeatDate"
+    private static let lastHeartbeatTimestampKey = "appRuntime.lastHeartbeatTimestamp"
     private static let lastBreadcrumbsKey = "appRuntime.lastBreadcrumbs"
     private static var cachedLaunchState: LaunchRecoveryState?
 
@@ -107,9 +109,14 @@ enum AppRuntimeState {
             previousHeartbeatDate: previousHeartbeatDate
         )
 
+        let now = Date()
         defaults.set(false, forKey: didLaunchCleanlyKey)
-        defaults.set(Date(), forKey: lastLaunchDateKey)
-        defaults.set(Date(), forKey: lastHeartbeatDateKey)
+        defaults.set(now, forKey: lastLaunchDateKey)
+        defaults.set(now.timeIntervalSince1970, forKey: lastLaunchTimestampKey)
+        defaults.set(now, forKey: lastHeartbeatDateKey)
+        defaults.set(now.timeIntervalSince1970, forKey: lastHeartbeatTimestampKey)
+        LoginItemSharedState.markMainAppLaunch(at: now)
+        synchronize()
         cachedLaunchState = state
 
         recordBreadcrumb("launch-begin")
@@ -117,7 +124,10 @@ enum AppRuntimeState {
     }
 
     static func recordHeartbeat(reason: String) {
-        defaults.set(Date(), forKey: lastHeartbeatDateKey)
+        let now = Date()
+        defaults.set(now, forKey: lastHeartbeatDateKey)
+        defaults.set(now.timeIntervalSince1970, forKey: lastHeartbeatTimestampKey)
+        LoginItemSharedState.markHeartbeat(at: now)
         recordBreadcrumb("heartbeat-\(reason)")
     }
 
@@ -132,13 +142,40 @@ enum AppRuntimeState {
             breadcrumbs.removeFirst(breadcrumbs.count - 40)
         }
         defaults.set(breadcrumbs, forKey: lastBreadcrumbsKey)
-        defaults.set(Date(), forKey: lastHeartbeatDateKey)
+        let now = Date()
+        defaults.set(now, forKey: lastHeartbeatDateKey)
+        defaults.set(now.timeIntervalSince1970, forKey: lastHeartbeatTimestampKey)
+        LoginItemSharedState.markHeartbeat(at: now)
+        synchronize()
     }
 
     static func markCleanTermination() {
+        guard isPrimaryInstance else { return }
         defaults.set(true, forKey: didLaunchCleanlyKey)
-        defaults.set(Date(), forKey: lastHeartbeatDateKey)
+        let now = Date()
+        defaults.set(now, forKey: lastHeartbeatDateKey)
+        defaults.set(now.timeIntervalSince1970, forKey: lastHeartbeatTimestampKey)
+        LoginItemSharedState.markCleanTermination(at: now)
         recordBreadcrumb("termination-clean")
+        synchronize()
+    }
+
+    static func prepareForUserInitiatedTermination(reason: String) {
+        guard isPrimaryInstance else { return }
+        let now = Date()
+        defaults.set(true, forKey: didLaunchCleanlyKey)
+        LoginItemSharedState.markUserInitiatedTermination(at: now)
+        recordBreadcrumb("termination-user-\(reason)")
+        synchronize()
+    }
+
+    private static var isPrimaryInstance: Bool {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else { return true }
+        return NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).count <= 1
+    }
+
+    private static func synchronize() {
+        defaults.synchronize()
     }
 }
 

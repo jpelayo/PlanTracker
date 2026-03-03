@@ -15,11 +15,6 @@ actor WebViewCookieManager {
                 WKWebsiteDataStore.default().httpCookieStore.getAllCookies { cookies in
                     let claudeCookies = cookies.filter { $0.domain.contains("claude.ai") }
 
-                    print("[WebViewCookieManager] Found \(claudeCookies.count) claude.ai cookies")
-                    for cookie in claudeCookies {
-                        print("  - \(cookie.name)")
-                    }
-
                     guard !claudeCookies.isEmpty else {
                         continuation.resume(returning: nil)
                         return
@@ -57,7 +52,6 @@ actor WebViewCookieManager {
                         dataStore.fetchDataRecords(ofTypes: dataTypes) { records in
                             let claudeRecords = records.filter { $0.displayName.contains("claude.ai") }
                             dataStore.removeData(ofTypes: dataTypes, for: claudeRecords) {
-                                print("[WebViewCookieManager] Cleared all Claude session data")
                                 continuation.resume()
                             }
                         }

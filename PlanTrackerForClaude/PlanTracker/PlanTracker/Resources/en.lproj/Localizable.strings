@@ -24,6 +24,7 @@
 /* Settings */
 "General" = "General";
 "Launch at login" = "Launch at login";
+"When enabled, PlanTracker starts at login and quietly restores itself if macOS closes it unexpectedly." = "When enabled, PlanTracker starts at login and quietly restores itself if macOS closes it unexpectedly.";
 "Change language" = "Change language";
 "(requires app restart)" = "(requires app restart)";
 "System" = "System";

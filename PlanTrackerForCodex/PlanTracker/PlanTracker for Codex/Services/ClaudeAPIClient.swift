@@ -10,6 +10,9 @@ actor OpenAIAPIClient {
     private let session: URLSession
     private var sessionCookies: String?
     private var accessToken: String?
+    private var accessTokenFetchedAt: Date?
+    private var cachedProfile: OpenAIMeProfile?
+    private var cachedProfileFetchedAt: Date?
 
     enum APIError: Error, LocalizedError {
         case unauthorized
@@ -67,35 +70,64 @@ actor OpenAIAPIClient {
     func clearSessionCookies() {
         self.sessionCookies = nil
         self.accessToken = nil
+        self.accessTokenFetchedAt = nil
+        self.cachedProfile = nil
+        self.cachedProfileFetchedAt = nil
     }
 
-    func fetchSession() async throws -> OpenAISessionResponse {
+    private func fetchSession() async throws -> OpenAISessionResponse {
         let request = try makeRequest(endpoint: "/api/auth/session")
         let (data, response) = try await performRequest(request)
         let sessionResponse = try decode(OpenAISessionResponse.self, from: data, response: response)
 
         if let token = sessionResponse.accessToken, !token.isEmpty {
             accessToken = token
+            accessTokenFetchedAt = Date()
         }
 
         return sessionResponse
     }
 
-    func fetchMeProfile() async throws -> OpenAIMeProfile {
+    private func ensureAccessToken(forceRefresh: Bool = false, maxAge: TimeInterval = 30 * 60) async throws {
+        if !forceRefresh,
+           let accessToken,
+           !accessToken.isEmpty,
+           let accessTokenFetchedAt,
+           Date().timeIntervalSince(accessTokenFetchedAt) < maxAge {
+            return
+        }
+
         _ = try await fetchSession()
+    }
+
+    func fetchMeProfile(forceRefresh: Bool = false) async throws -> OpenAIMeProfile {
+        if !forceRefresh,
+           let cachedProfile,
+           let cachedProfileFetchedAt,
+           Date().timeIntervalSince(cachedProfileFetchedAt) < 6 * 3600 {
+            return cachedProfile
+        }
+
+        try await ensureAccessToken(forceRefresh: forceRefresh)
         let request = try makeRequest(endpoint: "/backend-api/me", includeAuthorization: true)
         let (data, response) = try await performRequest(request)
         let json = try decodeJSON(from: data, response: response)
-        return OpenAIMeParser.parseProfile(from: json)
+        let profile = OpenAIMeParser.parseProfile(from: json)
+        cachedProfile = profile
+        cachedProfileFetchedAt = Date()
+        return profile
     }
 
-    func fetchUsageSnapshot() async throws -> OpenAIUsageSnapshot {
-        _ = try await fetchSession()
+    func fetchUsageSnapshot(includeMetadataEndpoints: Bool = false) async throws -> OpenAIUsageSnapshot {
+        try await ensureAccessToken()
+        return try await fetchUsageSnapshotInternal(includeMetadataEndpoints: includeMetadataEndpoints)
+    }
 
+    private func fetchUsageSnapshotInternal(includeMetadataEndpoints: Bool) async throws -> OpenAIUsageSnapshot {
         var snapshots: [OpenAIUsageSnapshot] = []
         var lastError: Error?
 
-        for candidate in usageEndpoints() {
+        for candidate in usageEndpoints(includeMetadataEndpoints: includeMetadataEndpoints) {
             do {
                 let request = try makeRequest(
                     endpoint: candidate.endpoint,
@@ -109,11 +141,8 @@ actor OpenAIAPIClient {
                     from: json,
                     collectLimits: candidate.collectLimits
                 )
-
-                print("[OpenAIAPIClient] \(candidate.endpoint) -> \(snapshot.limits.count) limit candidates")
                 snapshots.append(snapshot)
             } catch {
-                print("[OpenAIAPIClient] Failed \(candidate.endpoint): \(error)")
                 lastError = error
             }
         }
@@ -123,57 +152,68 @@ actor OpenAIAPIClient {
             return merged
         }
 
+        if !includeMetadataEndpoints {
+            return try await fetchUsageSnapshotInternal(includeMetadataEndpoints: true)
+        }
+
         if let lastError {
             throw lastError
         }
         throw APIError.usageDataUnavailable
     }
 
-    private func usageEndpoints() -> [UsageEndpointCandidate] {
-        return [
+    private func usageEndpoints(includeMetadataEndpoints: Bool) -> [UsageEndpointCandidate] {
+        var endpoints = [
             UsageEndpointCandidate(
                 endpoint: "/backend-api/wham/usage",
                 method: "GET",
                 body: nil,
                 requiresAuth: true,
                 collectLimits: true
-            ),
-            UsageEndpointCandidate(
-                endpoint: "/backend-api/wham/usage/daily-token-usage-breakdown",
-                method: "GET",
-                body: nil,
-                requiresAuth: true,
-                collectLimits: false
-            ),
-            UsageEndpointCandidate(
-                endpoint: "/backend-api/wham/usage/credit-usage-events",
-                method: "GET",
-                body: nil,
-                requiresAuth: true,
-                collectLimits: false
-            ),
-            UsageEndpointCandidate(
-                endpoint: "/backend-api/checkout_pricing_config/configs/\(currentRegionIdentifier())",
-                method: "GET",
-                body: nil,
-                requiresAuth: true,
-                collectLimits: false
-            ),
-            UsageEndpointCandidate(
-                endpoint: "/backend-api/checkout_pricing_config/configs/ES",
-                method: "GET",
-                body: nil,
-                requiresAuth: true,
-                collectLimits: false
-            ),
-            UsageEndpointCandidate(
-                endpoint: "/backend-api/subscriptions",
-                method: "GET",
-                body: nil,
-                requiresAuth: true,
-                collectLimits: false
             )
         ]
+
+        if includeMetadataEndpoints {
+            endpoints.append(contentsOf: [
+                UsageEndpointCandidate(
+                    endpoint: "/backend-api/wham/usage/daily-token-usage-breakdown",
+                    method: "GET",
+                    body: nil,
+                    requiresAuth: true,
+                    collectLimits: false
+                ),
+                UsageEndpointCandidate(
+                    endpoint: "/backend-api/wham/usage/credit-usage-events",
+                    method: "GET",
+                    body: nil,
+                    requiresAuth: true,
+                    collectLimits: false
+                ),
+                UsageEndpointCandidate(
+                    endpoint: "/backend-api/checkout_pricing_config/configs/\(currentRegionIdentifier())",
+                    method: "GET",
+                    body: nil,
+                    requiresAuth: true,
+                    collectLimits: false
+                ),
+                UsageEndpointCandidate(
+                    endpoint: "/backend-api/checkout_pricing_config/configs/ES",
+                    method: "GET",
+                    body: nil,
+                    requiresAuth: true,
+                    collectLimits: false
+                ),
+                UsageEndpointCandidate(
+                    endpoint: "/backend-api/subscriptions",
+                    method: "GET",
+                    body: nil,
+                    requiresAuth: true,
+                    collectLimits: false
+                )
+            ])
+        }
+
+        return endpoints
     }
 
     private func currentRegionIdentifier() -> String {
@@ -233,7 +273,6 @@ actor OpenAIAPIClient {
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }
 
-        print("[OpenAIAPIClient] Request \(method) \(endpoint)")
         return request
     }
 
@@ -255,12 +294,10 @@ actor OpenAIAPIClient {
                     bodyPreview: preview(of: data)
                 )
             }
-            print("[OpenAIAPIClient] Response status: \(httpResponse.statusCode)")
             return (data, httpResponse)
         } catch let error as APIError {
             throw error
         } catch {
-            print("[OpenAIAPIClient] Network error: \(error)")
             throw APIError.networkError(error)
         }
     }
@@ -282,7 +319,6 @@ actor OpenAIAPIClient {
         default:
             let endpoint = response.url?.path ?? "unknown"
             let preview = preview(of: data)
-            print("[OpenAIAPIClient] Invalid response for \(endpoint) status=\(response.statusCode) body=\(preview ?? "nil")")
             throw APIError.invalidResponse(
                 endpoint: endpoint,
                 statusCode: response.statusCode,
@@ -306,7 +342,6 @@ actor OpenAIAPIClient {
         default:
             let endpoint = response.url?.path ?? "unknown"
             let preview = preview(of: data)
-            print("[OpenAIAPIClient] Invalid JSON response for \(endpoint) status=\(response.statusCode) body=\(preview ?? "nil")")
             throw APIError.invalidResponse(
                 endpoint: endpoint,
                 statusCode: response.statusCode,

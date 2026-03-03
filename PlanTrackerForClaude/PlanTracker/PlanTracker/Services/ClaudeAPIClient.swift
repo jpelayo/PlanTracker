@@ -74,21 +74,18 @@ actor ClaudeAPIClient {
         let cookieValue = sessionKey.contains("=") ? sessionKey : "sessionKey=\(sessionKey)"
         request.setValue(cookieValue, forHTTPHeaderField: "Cookie")
 
-        print("[ClaudeAPIClient] Request to \(endpoint)")
         return request
     }
 
     func fetchBootstrap() async throws -> BootstrapResponse {
         let request = try makeRequest(endpoint: "/api/bootstrap")
         let (data, response) = try await performRequest(request)
-        print("[ClaudeAPIClient] Bootstrap raw: \(String(data: data, encoding: .utf8) ?? "nil")")
         return try decode(BootstrapResponse.self, from: data, response: response)
     }
 
     func fetchOrganizations() async throws -> [Organization] {
         let request = try makeRequest(endpoint: "/api/organizations")
         let (data, response) = try await performRequest(request)
-        print("[ClaudeAPIClient] Organizations raw: \(String(data: data, encoding: .utf8) ?? "nil")")
         return try decode([Organization].self, from: data, response: response)
     }
 
@@ -96,14 +93,12 @@ actor ClaudeAPIClient {
     func fetchUsage(orgUuid: String) async throws -> UsageResponse {
         let request = try makeRequest(endpoint: "/api/organizations/\(orgUuid)/usage")
         let (data, response) = try await performRequest(request)
-        print("[ClaudeAPIClient] Usage raw: \(String(data: data, encoding: .utf8) ?? "nil")")
 
         do {
             return try decode(UsageResponse.self, from: data, response: response)
         } catch let APIError.decodingError(decodingError) {
             let json = try decodeJSON(from: data, response: response)
             if let parsed = UsageResponseParser.parse(from: json) {
-                print("[ClaudeAPIClient] Parsed usage via compatibility parser")
                 return parsed
             }
             throw APIError.decodingError(decodingError)
@@ -117,7 +112,6 @@ actor ClaudeAPIClient {
             let (data, response) = try await performRequest(request)
             return try decode(PrepaidCreditsResponse.self, from: data, response: response)
         } catch {
-            print("[ClaudeAPIClient] Prepaid credits not available: \(error)")
             return nil
         }
     }
@@ -129,7 +123,6 @@ actor ClaudeAPIClient {
             let (data, response) = try await performRequest(request)
             return try decode(OverageSpendLimitResponse.self, from: data, response: response)
         } catch {
-            print("[ClaudeAPIClient] Overage spend limit not available: \(error)")
             return nil
         }
     }
@@ -141,7 +134,6 @@ actor ClaudeAPIClient {
             let (data, response) = try await performRequest(request)
             return try decode(OverageCreditGrantResponse.self, from: data, response: response)
         } catch {
-            print("[ClaudeAPIClient] Overage credit grant not available: \(error)")
             return nil
         }
     }
@@ -164,12 +156,10 @@ actor ClaudeAPIClient {
                     bodyPreview: preview(of: data)
                 )
             }
-            print("[ClaudeAPIClient] Response status: \(httpResponse.statusCode)")
             return (data, httpResponse)
         } catch let error as APIError {
             throw error
         } catch {
-            print("[ClaudeAPIClient] Network error: \(error)")
             throw APIError.networkError(error)
         }
     }
@@ -182,7 +172,6 @@ actor ClaudeAPIClient {
                 decoder.keyDecodingStrategy = .convertFromSnakeCase
                 return try decoder.decode(type, from: data)
             } catch {
-                print("[ClaudeAPIClient] Decode error: \(error)")
                 throw APIError.decodingError(error)
             }
         case 401:
@@ -192,7 +181,6 @@ actor ClaudeAPIClient {
         default:
             let endpoint = response.url?.path ?? "unknown"
             let preview = preview(of: data)
-            print("[ClaudeAPIClient] Invalid response for \(endpoint) status=\(response.statusCode) body=\(preview ?? "nil")")
             throw APIError.invalidResponse(
                 endpoint: endpoint,
                 statusCode: response.statusCode,
@@ -216,7 +204,6 @@ actor ClaudeAPIClient {
         default:
             let endpoint = response.url?.path ?? "unknown"
             let preview = preview(of: data)
-            print("[ClaudeAPIClient] Invalid JSON response for \(endpoint) status=\(response.statusCode) body=\(preview ?? "nil")")
             throw APIError.invalidResponse(
                 endpoint: endpoint,
                 statusCode: response.statusCode,

@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B10000042F000001004FA230 /* PlanTrackerCodexLoginHelper.app in CopyFiles */ = {isa = PBXBuildFile; fileRef = B10000012F000001004FA230 /* PlanTrackerCodexLoginHelper.app */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		3EEBAD492F2C8C6E004FA230 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,12 +25,33 @@
 			remoteGlobalIDString = 3EEBAD382F2C8C6B004FA230;
 			remoteInfo = PlanTracker;
 		};
+		B10000092F000001004FA230 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3EEBAD312F2C8C6B004FA230 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B100000B2F000001004FA230;
+			remoteInfo = PlanTrackerCodexLoginHelper;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B10000052F000001004FA230 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Library/LoginItems";
+			dstSubfolderSpec = 16;
+			files = (
+				B10000042F000001004FA230 /* PlanTrackerCodexLoginHelper.app in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		3EEBAD392F2C8C6B004FA230 /* PlanTracker for Codex.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "PlanTracker for Codex.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3EEBAD482F2C8C6E004FA230 /* PlanTracker for CodexTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "PlanTracker for CodexTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3EEBAD522F2C8C6E004FA230 /* PlanTracker for CodexUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "PlanTracker for CodexUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000012F000001004FA230 /* PlanTrackerCodexLoginHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PlanTrackerCodexLoginHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -36,6 +61,13 @@
 				Info.plist,
 			);
 			target = 3EEBAD382F2C8C6B004FA230 /* PlanTracker for Codex */;
+		};
+		B10000022F000001004FA230 /* Exceptions for "PlanTrackerCodexLoginHelper" folder in "PlanTrackerCodexLoginHelper" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B100000B2F000001004FA230 /* PlanTrackerCodexLoginHelper */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -56,6 +88,14 @@
 		3EEBAD552F2C8C6E004FA230 /* PlanTrackerUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = PlanTrackerUITests;
+			sourceTree = "<group>";
+		};
+		B10000032F000001004FA230 /* PlanTrackerCodexLoginHelper */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B10000022F000001004FA230 /* Exceptions for "PlanTrackerCodexLoginHelper" folder in "PlanTrackerCodexLoginHelper" target */,
+			);
+			path = PlanTrackerCodexLoginHelper;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -82,6 +122,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B10000062F000001004FA230 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -89,6 +136,7 @@
 			isa = PBXGroup;
 			children = (
 				3EEBAD3B2F2C8C6B004FA230 /* PlanTracker for Codex */,
+				B10000032F000001004FA230 /* PlanTrackerCodexLoginHelper */,
 				3EEBAD4B2F2C8C6E004FA230 /* PlanTrackerTests */,
 				3EEBAD552F2C8C6E004FA230 /* PlanTrackerUITests */,
 				3EEBAD3A2F2C8C6B004FA230 /* Products */,
@@ -99,6 +147,7 @@
 			isa = PBXGroup;
 			children = (
 				3EEBAD392F2C8C6B004FA230 /* PlanTracker for Codex.app */,
+				B10000012F000001004FA230 /* PlanTrackerCodexLoginHelper.app */,
 				3EEBAD482F2C8C6E004FA230 /* PlanTracker for CodexTests.xctest */,
 				3EEBAD522F2C8C6E004FA230 /* PlanTracker for CodexUITests.xctest */,
 			);
@@ -115,10 +164,12 @@
 				3EEBAD352F2C8C6B004FA230 /* Sources */,
 				3EEBAD362F2C8C6B004FA230 /* Frameworks */,
 				3EEBAD372F2C8C6B004FA230 /* Resources */,
+				B10000052F000001004FA230 /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B100000A2F000001004FA230 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				3EEBAD3B2F2C8C6B004FA230 /* PlanTracker for Codex */,
@@ -176,6 +227,28 @@
 			productReference = 3EEBAD522F2C8C6E004FA230 /* PlanTracker for CodexUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		B100000B2F000001004FA230 /* PlanTrackerCodexLoginHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B100000E2F000001004FA230 /* Build configuration list for PBXNativeTarget "PlanTrackerCodexLoginHelper" */;
+			buildPhases = (
+				B10000082F000001004FA230 /* Sources */,
+				B10000062F000001004FA230 /* Frameworks */,
+				B10000072F000001004FA230 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B10000032F000001004FA230 /* PlanTrackerCodexLoginHelper */,
+			);
+			name = PlanTrackerCodexLoginHelper;
+			packageProductDependencies = (
+			);
+			productName = PlanTrackerCodexLoginHelper;
+			productReference = B10000012F000001004FA230 /* PlanTrackerCodexLoginHelper.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -197,6 +270,9 @@
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = 3EEBAD382F2C8C6B004FA230;
 					};
+					B100000B2F000001004FA230 = {
+						CreatedOnToolsVersion = 26.2;
+					};
 				};
 			};
 			buildConfigurationList = 3EEBAD342F2C8C6B004FA230 /* Build configuration list for PBXProject "PlanTracker for Codex" */;
@@ -215,6 +291,7 @@
 			projectRoot = "";
 			targets = (
 				3EEBAD382F2C8C6B004FA230 /* PlanTracker for Codex */,
+				B100000B2F000001004FA230 /* PlanTrackerCodexLoginHelper */,
 				3EEBAD472F2C8C6E004FA230 /* PlanTracker for CodexTests */,
 				3EEBAD512F2C8C6E004FA230 /* PlanTracker for CodexUITests */,
 			);
@@ -237,6 +314,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		3EEBAD502F2C8C6E004FA230 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000072F000001004FA230 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -267,6 +351,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B10000082F000001004FA230 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -279,6 +370,11 @@
 			isa = PBXTargetDependency;
 			target = 3EEBAD382F2C8C6B004FA230 /* PlanTracker for Codex */;
 			targetProxy = 3EEBAD532F2C8C6E004FA230 /* PBXContainerItemProxy */;
+		};
+		B100000A2F000001004FA230 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B100000B2F000001004FA230 /* PlanTrackerCodexLoginHelper */;
+			targetProxy = B10000092F000001004FA230 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -413,7 +509,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = 833T9Q2V4W;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -453,7 +549,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 12;
 				DEVELOPMENT_TEAM = 833T9Q2V4W;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -569,6 +665,70 @@
 			};
 			name = Release;
 		};
+		B100000C2F000001004FA230 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PlanTrackerCodexLoginHelper/PlanTrackerCodexLoginHelper.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 11;
+				DEVELOPMENT_TEAM = 833T9Q2V4W;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PlanTrackerCodexLoginHelper/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "PlanTracker Codex Login Helper";
+				INFOPLIST_KEY_LSBackgroundOnly = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.infinitecontext.codextracker.loginitem;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		B100000D2F000001004FA230 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PlanTrackerCodexLoginHelper/PlanTrackerCodexLoginHelper.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 11;
+				DEVELOPMENT_TEAM = 833T9Q2V4W;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PlanTrackerCodexLoginHelper/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "PlanTracker Codex Login Helper";
+				INFOPLIST_KEY_LSBackgroundOnly = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.infinitecontext.codextracker.loginitem;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -604,6 +764,15 @@
 			buildConfigurations = (
 				3EEBAD632F2C8C6E004FA230 /* Debug */,
 				3EEBAD642F2C8C6E004FA230 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B100000E2F000001004FA230 /* Build configuration list for PBXNativeTarget "PlanTrackerCodexLoginHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B100000C2F000001004FA230 /* Debug */,
+				B100000D2F000001004FA230 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
