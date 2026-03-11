@@ -20,6 +20,7 @@
 "Quit" = "Quit";
 "No usage limits available" = "No usage limits available";
 "Demo" = "Demo";
+"Claude status" = "Claude status";
 
 /* Settings */
 "General" = "General";

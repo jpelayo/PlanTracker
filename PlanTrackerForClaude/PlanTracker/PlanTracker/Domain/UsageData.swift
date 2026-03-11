@@ -17,6 +17,7 @@ struct UsageData: Codable, Sendable, Equatable {
     let extraUsageUtilization: Double?
     let extraUsageResetsAt: Date?
     let planTier: PlanTier
+    let planDisplayNameOverride: String?
     let prepaidCreditsRemaining: Int?  // Minor units (cents)
     let prepaidCreditsTotal: Int?      // Minor units (cents)
     let prepaidCreditsCurrency: String?
@@ -33,6 +34,14 @@ struct UsageData: Codable, Sendable, Equatable {
               let used = overageUsedCredits,
               let currency = overageCurrency else { return false }
         return limit > 0 && used >= 0 && !currency.isEmpty
+    }
+
+    var planDisplayName: String {
+        guard let override = planDisplayNameOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !override.isEmpty else {
+            return planTier.displayName
+        }
+        return override
     }
 
     /// Returns remaining percentage (100 - utilization)
@@ -124,7 +133,9 @@ struct UsageData: Codable, Sendable, Equatable {
     }
 
     var overageUtilization: Double? {
-        guard let used = overageUsedCredits, let limit = overageMonthlyLimit, limit > 0 else { return nil }
+        guard let used = overageUsedCredits,
+              let limit = effectiveOverageLimitMinorUnits,
+              limit > 0 else { return nil }
         return (Double(used) / Double(limit)) * 100
     }
 
@@ -134,15 +145,37 @@ struct UsageData: Codable, Sendable, Equatable {
     }
 
     var overageLimitFormatted: String? {
-        guard let limit = overageMonthlyLimit, let currency = overageCurrency else { return nil }
+        guard let limit = effectiveOverageLimitMinorUnits,
+              let currency = overageCurrency else { return nil }
         return formatCurrency(amount: limit, currency: currency)
     }
 
     var overageRemainingFormatted: String? {
-        guard let limit = overageMonthlyLimit,
+        guard let limit = effectiveOverageLimitMinorUnits,
               let used = overageUsedCredits,
               let currency = overageCurrency else { return nil }
         return formatCurrency(amount: max(0, limit - used), currency: currency)
+    }
+
+    private var effectiveOverageLimitMinorUnits: Int? {
+        guard let used = overageUsedCredits else {
+            return nil
+        }
+
+        // Prefer prepaid credits as source of truth for currently available wallet.
+        if let prepaidRemaining = prepaidCreditsRemaining, prepaidRemaining >= 0 {
+            let prepaidPool = max(used, used + prepaidRemaining)
+            if let monthlyLimit = overageMonthlyLimit, monthlyLimit > 0 {
+                return max(used, min(monthlyLimit, prepaidPool))
+            }
+            return prepaidPool
+        }
+
+        if let monthlyLimit = overageMonthlyLimit, monthlyLimit > 0 {
+            return max(monthlyLimit, used)
+        }
+
+        return nil
     }
 
     private func formatTimeRemaining(until date: Date) -> String {
@@ -174,6 +207,7 @@ struct UsageData: Codable, Sendable, Equatable {
         extraUsageUtilization: nil,
         extraUsageResetsAt: nil,
         planTier: .unknown,
+        planDisplayNameOverride: nil,
         prepaidCreditsRemaining: nil,
         prepaidCreditsTotal: nil,
         prepaidCreditsCurrency: nil,

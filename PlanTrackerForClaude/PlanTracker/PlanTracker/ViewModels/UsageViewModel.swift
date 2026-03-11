@@ -16,10 +16,16 @@ final class UsageViewModel {
     private(set) var errorMessage: String?
     private(set) var lastUpdated: Date?
     private(set) var isDemoMode = false
+    private(set) var claudeSystemStatus: ClaudeSystemStatus = .degraded
+    private(set) var claudeStatusSourceUpdatedAt: Date?
     private let snapshotStore = PersistedUsageSnapshotStore()
     private var observerTokens: [NSObjectProtocol] = []
     private let loginItemService = SMAppService.loginItem(identifier: LoginItemConfiguration.helperBundleIdentifier)
     private var isApplyingLaunchAtLoginState = false
+    private var isFetchingClaudeStatus = false
+    private var lastClaudeStatusFetchAt: Date?
+    private let claudeStatusRefreshInterval: TimeInterval = 5 * 60
+    private let claudeStatusSignalWindow: TimeInterval = 24 * 60 * 60
 
     var pollingIntervalMinutes: Int = 5 {
         didSet {
@@ -78,6 +84,7 @@ final class UsageViewModel {
     private let authService: AuthenticationService
     private let pollingService: UsagePollingService
     private let cookieManager: WebViewCookieManager
+    private let claudeStatusService: ClaudeStatusService
 
     init() {
         self.keychainService = KeychainService()
@@ -85,6 +92,7 @@ final class UsageViewModel {
         self.authService = AuthenticationService(keychainService: keychainService, apiClient: apiClient)
         self.pollingService = UsagePollingService(apiClient: apiClient)
         self.cookieManager = WebViewCookieManager()
+        self.claudeStatusService = ClaudeStatusService()
 
         let launchState = AppRuntimeState.beginLaunchIfNeeded()
         if launchState.wasUnexpectedTermination {
@@ -126,6 +134,9 @@ final class UsageViewModel {
         restorePersistedSnapshot()
         setupPollingCallbacks()
         observeLifecycleNotifications()
+        Task { [weak self] in
+            await self?.refreshClaudeStatus(force: true)
+        }
     }
 
     private func applyLanguage() {
@@ -183,6 +194,9 @@ final class UsageViewModel {
                         if usageChanged {
                             self.persistUsageSnapshot()
                         }
+                    }
+                    Task { [weak self] in
+                        await self?.refreshClaudeStatus(force: false)
                     }
                 },
                 onError: { [weak self] error in
@@ -291,6 +305,7 @@ final class UsageViewModel {
         AppRuntimeState.recordBreadcrumb("manual-refresh")
         isLoading = true
         await pollingService.fetchUsage(forceMetadataRefresh: true)
+        await refreshClaudeStatus(force: true)
         isLoading = false
     }
 
@@ -315,6 +330,7 @@ final class UsageViewModel {
             extraUsageUtilization: 15.5,
             extraUsageResetsAt: sevenDayReset,
             planTier: .pro,
+            planDisplayNameOverride: nil,
             prepaidCreditsRemaining: 4280,  // $42.80
             prepaidCreditsTotal: 5000,      // $50.00
             prepaidCreditsCurrency: "USD",
@@ -337,6 +353,39 @@ final class UsageViewModel {
         let interval = TimeInterval(pollingIntervalMinutes * 60)
         await pollingService.setPollingInterval(interval)
         await pollingService.startPolling()
+        await refreshClaudeStatus(force: true)
+    }
+
+    var displayedClaudeSystemStatus: ClaudeSystemStatus {
+        guard let status = visibleClaudeSystemStatus else {
+            return .operational
+        }
+        return status
+    }
+
+    var visibleClaudeSystemStatus: ClaudeSystemStatus? {
+        guard let sourceUpdatedAt = claudeStatusSourceUpdatedAt else {
+            return nil
+        }
+        guard isUsableClaudeStatusTimestamp(sourceUpdatedAt) else {
+            return nil
+        }
+        switch claudeSystemStatus {
+        case .operational:
+            return nil
+        case .degraded, .outage:
+            return claudeSystemStatus
+        }
+    }
+
+    var visibleClaudeStatusSourceUpdatedAt: Date? {
+        guard let sourceUpdatedAt = claudeStatusSourceUpdatedAt else {
+            return nil
+        }
+        guard isUsableClaudeStatusTimestamp(sourceUpdatedAt) else {
+            return nil
+        }
+        return sourceUpdatedAt
     }
 
     var dailySessionFormatted: String? {
@@ -396,6 +445,44 @@ final class UsageViewModel {
 
     private func persistUsageSnapshot() {
         snapshotStore.save(usageData: usageData, lastUpdated: lastUpdated)
+    }
+
+    private func refreshClaudeStatus(force: Bool) async {
+        let now = Date()
+        if !force,
+           let lastFetch = lastClaudeStatusFetchAt,
+           now.timeIntervalSince(lastFetch) < claudeStatusRefreshInterval {
+            return
+        }
+
+        guard !isFetchingClaudeStatus else { return }
+        isFetchingClaudeStatus = true
+        lastClaudeStatusFetchAt = now
+        defer { isFetchingClaudeStatus = false }
+
+        do {
+            let snapshot = try await claudeStatusService.fetchStatus()
+            if let incomingUpdatedAt = snapshot.sourceUpdatedAt,
+               let existingUpdatedAt = claudeStatusSourceUpdatedAt,
+               incomingUpdatedAt < existingUpdatedAt {
+                return
+            }
+            if snapshot.sourceUpdatedAt == nil, claudeStatusSourceUpdatedAt != nil {
+                return
+            }
+            claudeSystemStatus = snapshot.status
+            claudeStatusSourceUpdatedAt = snapshot.sourceUpdatedAt
+        } catch {
+            // Keep previous status value on transient failures.
+        }
+    }
+
+    private func isUsableClaudeStatusTimestamp(_ sourceUpdatedAt: Date) -> Bool {
+        let now = Date()
+        if sourceUpdatedAt > now.addingTimeInterval(120) {
+            return false
+        }
+        return now.timeIntervalSince(sourceUpdatedAt) <= claudeStatusSignalWindow
     }
 }
 

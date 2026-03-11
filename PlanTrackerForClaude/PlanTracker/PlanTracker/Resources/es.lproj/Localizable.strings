@@ -21,6 +21,7 @@
 "Quit" = "Salir";
 "No usage limits available" = "Sin límites de uso disponibles";
 "Demo" = "Demo";
+"Claude status" = "Estado de Claude";
 
 /* Settings */
 "General" = "General";

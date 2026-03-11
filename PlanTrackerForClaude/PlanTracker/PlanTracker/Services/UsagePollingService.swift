@@ -13,6 +13,7 @@ actor UsagePollingService {
     private struct OrganizationContext: Sendable {
         let orgUuid: String
         let planTier: PlanTier
+        let planDisplayNameOverride: String?
         let refreshedAt: Date
     }
 
@@ -136,6 +137,7 @@ actor UsagePollingService {
             extraUsageUtilization: canonicalExtraUsageUtilization,
             extraUsageResetsAt: canonicalExtraUsageReset,
             planTier: organization.planTier,
+            planDisplayNameOverride: organization.planDisplayNameOverride,
             prepaidCreditsRemaining: billing?.prepaidCreditsRemaining,
             prepaidCreditsTotal: billing?.prepaidCreditsTotal,
             prepaidCreditsCurrency: billing?.prepaidCreditsCurrency,
@@ -164,9 +166,16 @@ actor UsagePollingService {
                 throw PollingError.organizationUnavailable
             }
 
+            let resolvedPlanTier = determinePlanTier(from: [org])
+            let planDisplayNameOverride = determinePlanDisplayNameOverride(
+                planTier: resolvedPlanTier,
+                rateLimitTier: org.rateLimitTier
+            )
+
             let resolved = OrganizationContext(
                 orgUuid: orgUuid,
-                planTier: determinePlanTier(from: organizations),
+                planTier: resolvedPlanTier,
+                planDisplayNameOverride: planDisplayNameOverride,
                 refreshedAt: Date()
             )
             organizationContext = resolved
@@ -263,5 +272,57 @@ actor UsagePollingService {
         }
 
         return .unknown
+    }
+
+    private func determinePlanDisplayNameOverride(
+        planTier: PlanTier,
+        rateLimitTier: String?
+    ) -> String? {
+        guard planTier == .max,
+              let multiplier = extractRateLimitMultiplier(from: rateLimitTier) else {
+            return nil
+        }
+        return "Max (\(multiplier))"
+    }
+
+    private func extractRateLimitMultiplier(from rateLimitTier: String?) -> String? {
+        guard let rawTier = rateLimitTier?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+              !rawTier.isEmpty,
+              rawTier.contains("max") else {
+            return nil
+        }
+
+        // Strict primary form (ex: default_claude_max_20x).
+        if let multiplier = extractMultiplier(
+            in: rawTier,
+            pattern: #"^default_[a-z0-9_]*max_([1-9][0-9]{0,2})x$"#
+        ) {
+            return multiplier
+        }
+
+        // Narrow fallback with separators to avoid accidental matches.
+        return extractMultiplier(
+            in: rawTier,
+            pattern: #"(?:^|_)max_([1-9][0-9]{0,2})x(?:_|$)"#
+        )
+    }
+
+    private func extractMultiplier(in text: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return nil
+        }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, options: [], range: range),
+              match.numberOfRanges >= 2,
+              let captureRange = Range(match.range(at: 1), in: text) else {
+            return nil
+        }
+        let digits = String(text[captureRange])
+        guard let value = Int(digits), (1...500).contains(value) else {
+            return nil
+        }
+        return "\(value)x"
     }
 }

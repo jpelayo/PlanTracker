@@ -67,7 +67,7 @@ struct SettingsView: View {
                 if let email = viewModel.authState.email {
                     LabeledContent(String(localized: "Signed in as"), value: email)
 
-                    LabeledContent(String(localized: "Plan"), value: viewModel.usageData.planTier.displayName)
+                    LabeledContent(String(localized: "Plan"), value: viewModel.usageData.planDisplayName)
 
                     Button(String(localized: "Sign Out"), role: .destructive) {
                         Task {

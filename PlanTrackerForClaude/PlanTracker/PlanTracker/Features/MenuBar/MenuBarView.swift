@@ -32,12 +32,30 @@ struct MenuBarView: View {
                 Text(String(localized: "Claude Tracker"))
                     .font(.headline)
                 Spacer()
-                Text(viewModel.usageData.planTier.displayName)
-                    .font(.caption)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.blue.opacity(0.2))
-                    .clipShape(.capsule)
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(viewModel.usageData.planDisplayName)
+                        .font(.caption)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.blue.opacity(0.2))
+                        .clipShape(.capsule)
+
+                    if let status = viewModel.visibleClaudeSystemStatus {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(colorForClaudeStatus(status))
+                                .frame(width: 7, height: 7)
+                            Text(String(localized: "Claude status"))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            if let sourceUpdatedAt = viewModel.visibleClaudeStatusSourceUpdatedAt {
+                                Text(sourceUpdatedAt, style: .relative)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
             }
 
             if let email = viewModel.authState.email {
@@ -430,6 +448,17 @@ struct MenuBarView: View {
         case ..<50: .green
         case 50..<80: .yellow
         default: .red
+        }
+    }
+
+    private func colorForClaudeStatus(_ status: ClaudeSystemStatus) -> Color {
+        switch status {
+        case .operational:
+            .green
+        case .degraded:
+            .orange
+        case .outage:
+            .red
         }
     }
 
