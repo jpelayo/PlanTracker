@@ -30,7 +30,7 @@ struct UsageData: Codable, Sendable, Equatable {
 
     /// Canonical extra-credits source: prefer monetary budget when available.
     var hasMonetaryExtraCredits: Bool {
-        guard let limit = overageMonthlyLimit,
+        guard let limit = effectiveOverageLimitMinorUnits,
               let used = overageUsedCredits,
               let currency = overageCurrency else { return false }
         return limit > 0 && used >= 0 && !currency.isEmpty
@@ -162,16 +162,16 @@ struct UsageData: Codable, Sendable, Equatable {
             return nil
         }
 
-        // Prefer prepaid credits as source of truth for currently available wallet.
+        // Source of truth for wallet-like credits: prepaid remaining.
         if let prepaidRemaining = prepaidCreditsRemaining, prepaidRemaining >= 0 {
             let prepaidPool = max(used, used + prepaidRemaining)
-            if let monthlyLimit = overageMonthlyLimit, monthlyLimit > 0 {
-                return max(used, min(monthlyLimit, prepaidPool))
-            }
             return prepaidPool
         }
 
-        if let monthlyLimit = overageMonthlyLimit, monthlyLimit > 0 {
+        // Fallback to monthly cap only when auto-reload is explicitly enabled.
+        if prepaidAutoReloadEnabled == true,
+           let monthlyLimit = overageMonthlyLimit,
+           monthlyLimit > 0 {
             return max(monthlyLimit, used)
         }
 
