@@ -20,6 +20,9 @@ final class UsageViewModel {
     private var observerTokens: [NSObjectProtocol] = []
     private let loginItemService = SMAppService.loginItem(identifier: LoginItemConfiguration.helperBundleIdentifier)
     private var isApplyingLaunchAtLoginState = false
+    private var isRecoveringAuth = false
+    private var lastAuthRecoveryAttemptAt: Date?
+    private let authRecoveryCooldown: TimeInterval = 60
 
     var pollingIntervalMinutes: Int = 5 {
         didSet {
@@ -183,6 +186,9 @@ final class UsageViewModel {
                         if usageChanged {
                             self.persistUsageSnapshot()
                         }
+                        Task { [weak self] in
+                            await self?.authService.persistCurrentSessionCookiesIfNeeded()
+                        }
                     }
                 },
                 onError: { [weak self] error in
@@ -241,6 +247,7 @@ final class UsageViewModel {
             guard authState.isAuthenticated else { return }
             AppRuntimeState.recordBreadcrumb("auth-identity-refreshed")
             authState = .authenticated(email: email)
+            await authService.persistCurrentSessionCookiesIfNeeded()
         } catch let error as OpenAIAPIClient.APIError {
             switch error {
             case .unauthorized, .forbidden:
@@ -358,15 +365,96 @@ final class UsageViewModel {
         if let apiError = error as? OpenAIAPIClient.APIError {
             switch apiError {
             case .unauthorized, .forbidden:
-                Task {
-                    await logout()
+                Task { @MainActor [weak self] in
+                    await self?.recoverFromAuthorizationFailure(apiError)
                 }
-                errorMessage = apiError.errorDescription
             default:
                 setNonCriticalErrorMessage(apiError.errorDescription)
             }
         } else {
             setNonCriticalErrorMessage(error.localizedDescription)
+        }
+    }
+
+    private func recoverFromAuthorizationFailure(_ apiError: OpenAIAPIClient.APIError) async {
+        if case .authenticating = authState {
+            errorMessage = apiError.errorDescription
+            return
+        }
+
+        guard canAttemptAuthRecovery else {
+            if !authState.isAuthenticated {
+                authState = .unauthenticated
+            }
+            errorMessage = apiError.errorDescription
+            return
+        }
+
+        isRecoveringAuth = true
+        defer {
+            isRecoveringAuth = false
+            lastAuthRecoveryAttemptAt = Date()
+        }
+
+        AppRuntimeState.recordBreadcrumb("auth-recovery-start")
+
+        if await recoverUsingStoredSession() {
+            AppRuntimeState.recordBreadcrumb("auth-recovery-stored-session")
+            errorMessage = nil
+            return
+        }
+
+        if await recoverUsingWebViewCookies() {
+            AppRuntimeState.recordBreadcrumb("auth-recovery-webview-cookies")
+            errorMessage = nil
+            return
+        }
+
+        AppRuntimeState.recordBreadcrumb("auth-recovery-failed")
+        if !authState.isAuthenticated {
+            authState = .unauthenticated
+        }
+        errorMessage = apiError.errorDescription
+    }
+
+    private var canAttemptAuthRecovery: Bool {
+        guard !isRecoveringAuth else { return false }
+        guard let lastAttempt = lastAuthRecoveryAttemptAt else { return true }
+        return Date().timeIntervalSince(lastAttempt) >= authRecoveryCooldown
+    }
+
+    private func recoverUsingStoredSession() async -> Bool {
+        guard let restoredSession = await authService.restoreStoredSession() else {
+            return false
+        }
+
+        if let email = restoredSession.email, !authState.isAuthenticated {
+            authState = .restoring(email: email)
+        }
+
+        do {
+            let email = try await authService.refreshCachedIdentity(forceRefresh: true)
+            authState = .authenticated(email: email)
+            await authService.persistCurrentSessionCookiesIfNeeded()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func recoverUsingWebViewCookies() async -> Bool {
+        guard let cookieString = await cookieManager.extractSessionCookies() else {
+            return false
+        }
+
+        do {
+            try await authService.saveSessionCookies(cookieString)
+            let email = try await authService.validateSession()
+            authState = .authenticated(email: email)
+            await authService.persistCurrentSessionCookiesIfNeeded()
+            return true
+        } catch {
+            return false
         }
     }
 

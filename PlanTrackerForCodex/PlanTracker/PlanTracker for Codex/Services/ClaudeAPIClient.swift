@@ -9,6 +9,7 @@ actor OpenAIAPIClient {
     private let baseURL = URL(string: "https://chatgpt.com")!
     private let session: URLSession
     private var sessionCookies: String?
+    private var sessionCookieValues: [String: String] = [:]
     private var accessToken: String?
     private var accessTokenFetchedAt: Date?
     private var cachedProfile: OpenAIMeProfile?
@@ -64,15 +65,21 @@ actor OpenAIAPIClient {
     }
 
     func setSessionCookies(_ cookies: String) {
-        self.sessionCookies = cookies
+        sessionCookieValues = Self.parseCookieHeader(cookies)
+        sessionCookies = Self.serializeCookieHeader(sessionCookieValues)
     }
 
     func clearSessionCookies() {
         self.sessionCookies = nil
+        self.sessionCookieValues.removeAll()
         self.accessToken = nil
         self.accessTokenFetchedAt = nil
         self.cachedProfile = nil
         self.cachedProfileFetchedAt = nil
+    }
+
+    func currentSessionCookies() -> String? {
+        sessionCookies
     }
 
     private func fetchSession() async throws -> OpenAISessionResponse {
@@ -248,7 +255,12 @@ actor OpenAIAPIClient {
         body: Data? = nil,
         includeAuthorization: Bool = false
     ) throws -> URLRequest {
-        guard let sessionCookies else {
+        if sessionCookieValues.isEmpty, let sessionCookies {
+            sessionCookieValues = Self.parseCookieHeader(sessionCookies)
+            self.sessionCookies = Self.serializeCookieHeader(sessionCookieValues)
+        }
+
+        guard !sessionCookieValues.isEmpty, let sessionCookies else {
             throw APIError.noSessionCookies
         }
 
@@ -294,6 +306,7 @@ actor OpenAIAPIClient {
                     bodyPreview: preview(of: data)
                 )
             }
+            absorbSetCookies(from: httpResponse, requestURL: request.url)
             return (data, httpResponse)
         } catch let error as APIError {
             throw error
@@ -359,6 +372,60 @@ actor OpenAIAPIClient {
         }
         let endIndex = trimmed.index(trimmed.startIndex, offsetBy: limit)
         return String(trimmed[..<endIndex]) + "..."
+    }
+
+    private func absorbSetCookies(from response: HTTPURLResponse, requestURL: URL?) {
+        guard let requestURL else { return }
+
+        var headerFields: [String: String] = [:]
+        for (key, value) in response.allHeaderFields {
+            guard let keyString = key as? String,
+                  let valueString = value as? String else { continue }
+            headerFields[keyString] = valueString
+        }
+        guard !headerFields.isEmpty else { return }
+
+        let cookies = HTTPCookie.cookies(withResponseHeaderFields: headerFields, for: requestURL)
+        guard !cookies.isEmpty else { return }
+
+        var changed = false
+        for cookie in cookies {
+            let isExpired = (cookie.expiresDate?.timeIntervalSinceNow ?? 1) <= 0 || cookie.value.isEmpty
+            if isExpired {
+                if sessionCookieValues.removeValue(forKey: cookie.name) != nil {
+                    changed = true
+                }
+            } else if sessionCookieValues[cookie.name] != cookie.value {
+                sessionCookieValues[cookie.name] = cookie.value
+                changed = true
+            }
+        }
+
+        guard changed else { return }
+        sessionCookies = Self.serializeCookieHeader(sessionCookieValues)
+    }
+
+    private static func parseCookieHeader(_ header: String) -> [String: String] {
+        var cookies: [String: String] = [:]
+        for pair in header.split(separator: ";") {
+            let trimmed = pair.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let components = trimmed.split(separator: "=", maxSplits: 1).map(String.init)
+            guard components.count == 2 else { continue }
+            let name = components[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = components[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, !value.isEmpty else { continue }
+            cookies[name] = value
+        }
+        return cookies
+    }
+
+    private static func serializeCookieHeader(_ cookies: [String: String]) -> String? {
+        guard !cookies.isEmpty else { return nil }
+        return cookies
+            .sorted { lhs, rhs in lhs.key < rhs.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: "; ")
     }
 }
 

@@ -73,4 +73,15 @@ actor AuthenticationService {
         await apiClient.clearSessionCookies()
         defaults.removeObject(forKey: cachedEmailKey)
     }
+
+    func persistCurrentSessionCookiesIfNeeded() async {
+        guard let currentCookies = await apiClient.currentSessionCookies(),
+              !currentCookies.isEmpty else {
+            return
+        }
+
+        let storedCookies = try? await keychainService.loadString(key: sessionCookiesKey)
+        guard storedCookies != currentCookies else { return }
+        try? await keychainService.save(key: sessionCookiesKey, string: currentCookies)
+    }
 }

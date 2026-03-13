@@ -13,10 +13,13 @@ actor WebViewCookieManager {
         await withCheckedContinuation { continuation in
             DispatchQueue.main.async {
                 WKWebsiteDataStore.default().httpCookieStore.getAllCookies { cookies in
+                    let now = Date()
                     let openAICookies = cookies.filter { cookie in
-                        cookie.domain.contains("chatgpt.com")
-                        || cookie.domain.contains("openai.com")
-                        || cookie.domain.contains("chat.openai.com")
+                        let isOpenAIDomain = cookie.domain.contains("chatgpt.com")
+                            || cookie.domain.contains("openai.com")
+                            || cookie.domain.contains("chat.openai.com")
+                        let isNotExpired = cookie.expiresDate == nil || cookie.expiresDate! > now
+                        return isOpenAIDomain && isNotExpired
                     }
 
                     guard !openAICookies.isEmpty else {

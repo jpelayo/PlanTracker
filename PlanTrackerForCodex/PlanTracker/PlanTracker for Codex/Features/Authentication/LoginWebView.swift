@@ -11,7 +11,7 @@ struct LoginWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
+        configuration.websiteDataStore = .default()
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
@@ -142,9 +142,11 @@ struct LoginWebView: NSViewRepresentable {
                 guard let self, !self.hasExtractedSession else { return }
 
                 let openAICookies = cookies.filter { cookie in
-                    cookie.domain.contains("chatgpt.com")
-                    || cookie.domain.contains("openai.com")
-                    || cookie.domain.contains("chat.openai.com")
+                    let isOpenAIDomain = cookie.domain.contains("chatgpt.com")
+                        || cookie.domain.contains("openai.com")
+                        || cookie.domain.contains("chat.openai.com")
+                    let isNotExpired = cookie.expiresDate == nil || cookie.expiresDate! > Date()
+                    return isOpenAIDomain && isNotExpired
                 }
                 print("[LoginWebView] Found \(openAICookies.count) OpenAI cookies:")
                 for cookie in openAICookies {
@@ -172,11 +174,6 @@ struct LoginWebView: NSViewRepresentable {
                 print("[LoginWebView] Sending cookie string (\(cookieString.count) chars)")
 
                 self.hasExtractedSession = true
-
-                // Clear WebView cookies to prevent duplicate Keychain entries
-                for cookie in openAICookies {
-                    dataStore.httpCookieStore.delete(cookie)
-                }
 
                 DispatchQueue.main.async {
                     self.onSessionCookiesExtracted(cookieString)
