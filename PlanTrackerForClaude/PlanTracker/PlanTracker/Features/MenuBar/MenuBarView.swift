@@ -27,35 +27,34 @@ struct MenuBarView: View {
     @ViewBuilder
     private var authenticatedContent: some View {
         // Header
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(String(localized: "Claude Tracker"))
                     .font(.headline)
                 Spacer()
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(viewModel.usageData.planDisplayName)
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.blue.opacity(0.2))
-                        .clipShape(.capsule)
+                Text(viewModel.usageData.planDisplayName)
+                    .font(.caption)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.blue.opacity(0.2))
+                    .clipShape(.capsule)
+            }
 
-                    if let status = viewModel.visibleClaudeSystemStatus {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(colorForClaudeStatus(status))
-                                .frame(width: 7, height: 7)
-                            Text(String(localized: "Claude status"))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            if let sourceUpdatedAt = viewModel.visibleClaudeStatusSourceUpdatedAt {
-                                Text(sourceUpdatedAt, style: .relative)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
+            if let status = viewModel.visibleClaudeSystemStatus {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(colorForClaudeStatus(status))
+                        .frame(width: 7, height: 7)
+
+                    Text(titleForClaudeStatus(status))
+                        .font(.caption2)
+                        .foregroundStyle(colorForClaudeStatus(status))
+                        .lineLimit(1)
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(colorForClaudeStatus(status).opacity(0.12))
+                .clipShape(.capsule)
             }
 
             if let email = viewModel.authState.email {
@@ -459,6 +458,17 @@ struct MenuBarView: View {
             .orange
         case .outage:
             .red
+        }
+    }
+
+    private func titleForClaudeStatus(_ status: ClaudeSystemStatus) -> String {
+        switch status {
+        case .operational:
+            String(localized: "Claude operational")
+        case .degraded:
+            String(localized: "Claude degraded")
+        case .outage:
+            String(localized: "Claude outage")
         }
     }
 
