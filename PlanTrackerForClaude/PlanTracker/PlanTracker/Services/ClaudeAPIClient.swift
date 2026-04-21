@@ -249,7 +249,7 @@ struct Organization: Codable, Sendable {
     }
 }
 
-struct UsageResponse: Codable, Sendable {
+struct UsageResponse: Decodable, Sendable {
     let fiveHour: UsagePeriod?
     let sevenDay: UsagePeriod?
     let sevenDayOpus: UsagePeriod?
@@ -259,9 +259,92 @@ struct UsageResponse: Codable, Sendable {
     let iguanaNecktie: UsagePeriod?
     let extraUsage: UsagePeriod?
 
-    struct UsagePeriod: Codable, Sendable {
+    struct UsagePeriod: Decodable, Sendable {
         let utilization: Double
         let resetsAt: String?
+
+        enum CodingKeys: String, CodingKey {
+            case utilization
+            case resetsAt
+            case resets_at
+            case usedCredits
+            case used_credits
+            case monthlyLimit
+            case monthly_limit
+            case remaining
+            case left
+            case limit
+            case max
+            case quota
+            case total
+        }
+
+        init(utilization: Double, resetsAt: String?) {
+            self.utilization = utilization
+            self.resetsAt = resetsAt
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+
+            let rawUtilization =
+                try Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .utilization)
+
+            let used =
+                try Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .usedCredits) ??
+                Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .used_credits)
+
+            let limit =
+                try Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .monthlyLimit) ??
+                Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .monthly_limit) ??
+                Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .limit) ??
+                Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .max) ??
+                Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .quota) ??
+                Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .total)
+
+            let remaining =
+                try Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .remaining) ??
+                Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .left)
+
+            let derivedUtilization: Double?
+            if let rawUtilization {
+                derivedUtilization = rawUtilization
+            } else if let used, let limit, limit > 0 {
+                derivedUtilization = (used / limit) * 100.0
+            } else if let remaining, let limit, limit > 0 {
+                derivedUtilization = ((limit - remaining) / limit) * 100.0
+            } else {
+                derivedUtilization = nil
+            }
+
+            guard let derivedUtilization else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .utilization,
+                    in: container,
+                    debugDescription: "Usage period is missing utilization and no derivation keys were found"
+                )
+            }
+
+            utilization = max(0, min(100, derivedUtilization))
+            resetsAt = try container.decodeIfPresent(String.self, forKey: .resetsAt)
+                ?? container.decodeIfPresent(String.self, forKey: .resets_at)
+        }
+
+        private static func decodeFlexibleDoubleIfPresent(
+            in container: KeyedDecodingContainer<CodingKeys>,
+            forKey key: CodingKeys
+        ) throws -> Double? {
+            if let value = try container.decodeIfPresent(Double.self, forKey: key) {
+                return value
+            }
+            if let value = try container.decodeIfPresent(Int.self, forKey: key) {
+                return Double(value)
+            }
+            if let value = try container.decodeIfPresent(String.self, forKey: key) {
+                return Double(value)
+            }
+            return nil
+        }
     }
 }
 
