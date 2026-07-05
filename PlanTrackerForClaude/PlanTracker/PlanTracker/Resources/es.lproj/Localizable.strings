@@ -4,8 +4,13 @@
 "7-Day Limit" = "Límite 7 días";
 "Opus (7-Day)" = "Opus (7 días)";
 "Sonnet (7-Day)" = "Sonnet (7 días)";
+"%@ (7-Day)" = "%@ (7 días)";
 "Extra Credits" = "Créditos Extra";
 "Extra Credits (Prepaid)" = "Créditos Extra";
+"Extra Usage" = "Uso extra";
+"Extra expenditure" = "Gasto adicional";
+"Enabled" = "Activado";
+"Disabled" = "Desactivado";
 "used" = "usado";
 "remaining" = "restante";
 "Auto-reload enabled" = "Recarga automática activada";

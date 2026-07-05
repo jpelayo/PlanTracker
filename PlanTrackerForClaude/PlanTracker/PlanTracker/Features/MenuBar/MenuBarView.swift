@@ -73,6 +73,11 @@ struct MenuBarView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
+                if let extraExpenditureStatus = extraExpenditureStatusText {
+                    Text(extraExpenditureStatus)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding()
@@ -151,6 +156,28 @@ struct MenuBarView: View {
                     }
                 }
 
+                // Dynamic weekly scoped usage (ex: Fable)
+                if let label = viewModel.usageData.sevenDayScopedLabel,
+                   let utilization = viewModel.usageData.sevenDayScopedUtilization {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(scopedSevenDayTitle(label))
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(Int(utilization))% \(String(localized: "used"))")
+                                .font(.subheadline)
+                                .foregroundStyle(colorForUtilization(utilization))
+                        }
+                        ProgressView(value: utilization / 100)
+                            .tint(colorForUtilization(utilization))
+                        if let reset = viewModel.usageData.formattedSevenDayScopedReset {
+                            Text("\(String(localized: "Resets")) \(reset)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
                 // 7-Day Sonnet Usage
                 if let utilization = viewModel.usageData.sevenDaySonnetUtilization {
                     VStack(alignment: .leading, spacing: 4) {
@@ -174,7 +201,7 @@ struct MenuBarView: View {
 
                 // Extra Usage (Add-on Credits)
                 if let utilization = viewModel.usageData.extraUsageUtilization,
-                   !viewModel.usageData.hasMonetaryExtraCredits {
+                   !viewModel.usageData.hasExtraUsageAccounting {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(String(localized: "Extra Credits"))
@@ -194,34 +221,44 @@ struct MenuBarView: View {
                     }
                 }
 
-                // Extra Credits (monthly overage budget)
-                if viewModel.usageData.hasMonetaryExtraCredits,
-                   let used = viewModel.usageData.overageUsedFormatted,
-                   let limit = viewModel.usageData.overageLimitFormatted,
-                   let utilization = viewModel.usageData.overageUtilization,
-                   let remaining = viewModel.usageData.overageRemainingFormatted {
+                // Purchased credits balance
+                if viewModel.usageData.hasAvailablePrepaidCredits,
+                   let remaining = viewModel.usageData.prepaidCreditsRemainingFormatted {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(String(localized: "Extra Credits (Prepaid)"))
+                            Text(String(localized: "Extra Credits"))
                                 .font(.subheadline)
                             Spacer()
-                            HStack(spacing: 2) {
-                                Text(used)
-                                    .foregroundStyle(.red)
-                                Text("/")
-                                    .foregroundStyle(.secondary)
-                                Text(limit)
+                            if let spent = viewModel.usageData.prepaidCreditsSpentFormatted,
+                               let total = viewModel.usageData.prepaidCreditsTotalFormatted {
+                                HStack(spacing: 2) {
+                                    Text(spent)
+                                        .foregroundStyle(.red)
+                                    Text("/")
+                                        .foregroundStyle(.secondary)
+                                    Text(total)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .font(.subheadline)
+                            } else {
+                                Text(remaining)
+                                    .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
-                            .font(.subheadline)
                         }
-                        ProgressView(value: min(utilization / 100, 1.0))
-                            .tint(colorForUtilization(utilization))
-                        Text("\(Int(100 - utilization))% \(String(localized: "remaining")) (\(remaining))")
-                            .font(.caption)
-                            .foregroundStyle(viewModel.usageData.overageOutOfCredits == true ? .red : .secondary)
 
-                        // Auto-reload hint
+                        if let utilization = viewModel.usageData.prepaidCreditsUtilization {
+                            ProgressView(value: min(utilization / 100, 1.0))
+                                .tint(colorForUtilization(utilization))
+                            Text("\(Int(100 - utilization))% \(String(localized: "remaining")) (\(remaining))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("\(String(localized: "remaining")) \(remaining)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
                         if let autoReload = viewModel.usageData.prepaidAutoReloadEnabled {
                             if autoReload {
                                 HStack(spacing: 4) {
@@ -241,6 +278,35 @@ struct MenuBarView: View {
                                 .foregroundStyle(.secondary)
                             }
                         }
+                    }
+                }
+
+                // Extra usage spend cap
+                if viewModel.usageData.hasStartedExtraUsageSpend,
+                   let used = viewModel.usageData.overageUsedFormatted,
+                   let limit = viewModel.usageData.overageLimitFormatted,
+                   let utilization = viewModel.usageData.overageUtilization,
+                   let remaining = viewModel.usageData.overageRemainingFormatted {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(String(localized: "Extra Usage"))
+                                .font(.subheadline)
+                            Spacer()
+                            HStack(spacing: 2) {
+                                Text(used)
+                                    .foregroundStyle(.red)
+                                Text("/")
+                                    .foregroundStyle(.secondary)
+                                Text(limit)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .font(.subheadline)
+                        }
+                        ProgressView(value: min(utilization / 100, 1.0))
+                            .tint(colorForUtilization(utilization))
+                        Text("\(Int(100 - utilization))% \(String(localized: "remaining")) (\(remaining))")
+                            .font(.caption)
+                            .foregroundStyle(viewModel.usageData.overageOutOfCredits == true ? .red : .secondary)
                     }
                 }
             }
@@ -440,6 +506,19 @@ struct MenuBarView: View {
         .contentShape(Rectangle())
         .padding(.horizontal)
         .padding(.vertical, 8)
+    }
+
+    private func scopedSevenDayTitle(_ label: String) -> String {
+        String(format: String(localized: "%@ (7-Day)"), label)
+    }
+
+    private var extraExpenditureStatusText: String? {
+        guard let enabled = viewModel.usageData.overageEnabled else { return nil }
+        let status = String(localized: enabled ? "Enabled" : "Disabled")
+        if let billable = viewModel.usageData.billableExtraUsageWithCapFormatted {
+            return "\(String(localized: "Extra expenditure")): \(status) (\(billable))"
+        }
+        return "\(String(localized: "Extra expenditure")): \(status)"
     }
 
     private func colorForUtilization(_ utilization: Double) -> Color {

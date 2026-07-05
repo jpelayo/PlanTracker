@@ -254,10 +254,154 @@ struct UsageResponse: Decodable, Sendable {
     let sevenDay: UsagePeriod?
     let sevenDayOpus: UsagePeriod?
     let sevenDaySonnet: UsagePeriod?
+    let sevenDayScoped: ScopedUsagePeriod?
     let sevenDayOauthApps: UsagePeriod?
     let sevenDayCowork: UsagePeriod?
     let iguanaNecktie: UsagePeriod?
     let extraUsage: UsagePeriod?
+    let spend: Spend?
+
+    private enum CodingKeys: String, CodingKey {
+        case fiveHour
+        case sevenDay
+        case sevenDayOpus
+        case sevenDaySonnet
+        case sevenDayOauthApps
+        case sevenDayCowork
+        case iguanaNecktie
+        case extraUsage
+        case spend
+        case limits
+    }
+
+    init(
+        fiveHour: UsagePeriod?,
+        sevenDay: UsagePeriod?,
+        sevenDayOpus: UsagePeriod?,
+        sevenDaySonnet: UsagePeriod?,
+        sevenDayScoped: ScopedUsagePeriod? = nil,
+        sevenDayOauthApps: UsagePeriod?,
+        sevenDayCowork: UsagePeriod?,
+        iguanaNecktie: UsagePeriod?,
+        extraUsage: UsagePeriod?,
+        spend: Spend? = nil
+    ) {
+        self.fiveHour = fiveHour
+        self.sevenDay = sevenDay
+        self.sevenDayOpus = sevenDayOpus
+        self.sevenDaySonnet = sevenDaySonnet
+        self.sevenDayScoped = sevenDayScoped
+        self.sevenDayOauthApps = sevenDayOauthApps
+        self.sevenDayCowork = sevenDayCowork
+        self.iguanaNecktie = iguanaNecktie
+        self.extraUsage = extraUsage
+        self.spend = spend
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let limits = try container.decodeIfPresent([UsageLimit].self, forKey: .limits) ?? []
+
+        fiveHour = try container.decodeIfPresent(UsagePeriod.self, forKey: .fiveHour)
+            ?? Self.bestLimit(in: limits, matching: { $0.normalizedKind == "session" || $0.normalizedGroup == "session" })?.period
+        sevenDay = try container.decodeIfPresent(UsagePeriod.self, forKey: .sevenDay)
+            ?? Self.bestLimit(in: limits, matching: { $0.normalizedKind == "weekly_all" })?.period
+            ?? Self.bestLimit(in: limits, matching: { $0.normalizedGroup == "weekly" && $0.modelDisplayName == nil })?.period
+        sevenDayOpus = try container.decodeIfPresent(UsagePeriod.self, forKey: .sevenDayOpus)
+        sevenDaySonnet = try container.decodeIfPresent(UsagePeriod.self, forKey: .sevenDaySonnet)
+        sevenDayScoped = Self.bestWeeklyScopedLimit(in: limits)
+        sevenDayOauthApps = try container.decodeIfPresent(UsagePeriod.self, forKey: .sevenDayOauthApps)
+        sevenDayCowork = try container.decodeIfPresent(UsagePeriod.self, forKey: .sevenDayCowork)
+        iguanaNecktie = try container.decodeIfPresent(UsagePeriod.self, forKey: .iguanaNecktie)
+        extraUsage = try container.decodeIfPresent(UsagePeriod.self, forKey: .extraUsage)
+        spend = try container.decodeIfPresent(Spend.self, forKey: .spend)
+    }
+
+    private static func bestWeeklyScopedLimit(in limits: [UsageLimit]) -> ScopedUsagePeriod? {
+        guard let limit = bestLimit(
+            in: limits,
+            matching: {
+                ($0.normalizedKind == "weekly_scoped" || $0.normalizedGroup == "weekly")
+                    && $0.modelDisplayName != nil
+            }
+        ),
+              let label = limit.modelDisplayName,
+              let period = limit.period else {
+            return nil
+        }
+
+        return ScopedUsagePeriod(label: label, period: period)
+    }
+
+    private static func bestLimit(
+        in limits: [UsageLimit],
+        matching predicate: (UsageLimit) -> Bool
+    ) -> UsageLimit? {
+        limits
+            .filter { predicate($0) && $0.period != nil }
+            .sorted { lhs, rhs in
+                if lhs.isActive != rhs.isActive {
+                    return lhs.isActive == true
+                }
+                return lhs.percent > rhs.percent
+            }
+            .first
+    }
+
+    struct ScopedUsagePeriod: Sendable {
+        let label: String
+        let period: UsagePeriod
+    }
+
+    struct Spend: Decodable, Sendable {
+        let used: MoneyAmount?
+        let limit: MoneyAmount?
+        let percent: Double?
+        let enabled: Bool?
+        let balance: MoneyAmount?
+        let cap: Cap?
+
+        struct Cap: Decodable, Sendable {
+            let credits: MoneyAmount?
+        }
+    }
+
+    struct MoneyAmount: Decodable, Sendable {
+        let amountMinor: Int?
+        let currency: String?
+        let exponent: Int?
+
+        private enum CodingKeys: String, CodingKey {
+            case amountMinor
+            case amount_minor
+            case currency
+            case exponent
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            amountMinor = try Self.decodeFlexibleIntIfPresent(in: container, forKey: .amountMinor)
+                ?? Self.decodeFlexibleIntIfPresent(in: container, forKey: .amount_minor)
+            currency = try container.decodeIfPresent(String.self, forKey: .currency)
+            exponent = try Self.decodeFlexibleIntIfPresent(in: container, forKey: .exponent)
+        }
+
+        private static func decodeFlexibleIntIfPresent(
+            in container: KeyedDecodingContainer<CodingKeys>,
+            forKey key: CodingKeys
+        ) throws -> Int? {
+            if let value = try container.decodeIfPresent(Int.self, forKey: key) {
+                return value
+            }
+            if let value = try container.decodeIfPresent(Double.self, forKey: key) {
+                return Int(value.rounded())
+            }
+            if let value = try container.decodeIfPresent(String.self, forKey: key) {
+                return Double(value).map { Int($0.rounded()) }
+            }
+            return nil
+        }
+    }
 
     struct UsagePeriod: Decodable, Sendable {
         let utilization: Double
@@ -265,6 +409,7 @@ struct UsageResponse: Decodable, Sendable {
 
         enum CodingKeys: String, CodingKey {
             case utilization
+            case percent
             case resetsAt
             case resets_at
             case usedCredits
@@ -288,7 +433,8 @@ struct UsageResponse: Decodable, Sendable {
             let container = try decoder.container(keyedBy: CodingKeys.self)
 
             let rawUtilization =
-                try Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .utilization)
+                try Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .utilization) ??
+                Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .percent)
 
             let used =
                 try Self.decodeFlexibleDoubleIfPresent(in: container, forKey: .usedCredits) ??
@@ -346,6 +492,52 @@ struct UsageResponse: Decodable, Sendable {
             return nil
         }
     }
+
+    private struct UsageLimit: Decodable {
+        let kind: String?
+        let group: String?
+        let percent: Double
+        let resetsAt: String?
+        private let scope: Scope?
+        let isActive: Bool?
+
+        var normalizedKind: String {
+            Self.normalize(kind)
+        }
+
+        var normalizedGroup: String {
+            Self.normalize(group)
+        }
+
+        var modelDisplayName: String? {
+            guard let displayName = scope?.model?.displayName?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !displayName.isEmpty else {
+                return nil
+            }
+            return displayName
+        }
+
+        var period: UsagePeriod? {
+            UsagePeriod(utilization: percent, resetsAt: resetsAt)
+        }
+
+        private static func normalize(_ value: String?) -> String {
+            value?
+                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                .lowercased()
+                .split { !$0.isLetter && !$0.isNumber }
+                .joined(separator: "_") ?? ""
+        }
+
+        private struct Scope: Decodable {
+            let model: Model?
+        }
+
+        private struct Model: Decodable {
+            let displayName: String?
+        }
+    }
 }
 
 private enum UsageResponseParser {
@@ -394,6 +586,7 @@ private enum UsageResponseParser {
             let sevenDay = popBest(from: &remaining, minimumScore: 1, scoring: sevenDayScore)
             let sevenDayOpus = popBest(from: &remaining, minimumScore: 1, scoring: opusScore)
             let sevenDaySonnet = popBest(from: &remaining, minimumScore: 1, scoring: sonnetScore)
+            let sevenDayScoped = popBest(from: &remaining, minimumScore: 1, scoring: scopedWeeklyScore)
             let sevenDayOauthApps = popBest(from: &remaining, minimumScore: 1, scoring: oauthAppsScore)
             let sevenDayCowork = popBest(from: &remaining, minimumScore: 1, scoring: coworkScore)
             let iguanaNecktie = popBest(from: &remaining, minimumScore: 1, scoring: iguanaScore)
@@ -404,6 +597,9 @@ private enum UsageResponseParser {
                 sevenDay: sevenDay?.period,
                 sevenDayOpus: sevenDayOpus?.period,
                 sevenDaySonnet: sevenDaySonnet?.period,
+                sevenDayScoped: sevenDayScoped.map {
+                    UsageResponse.ScopedUsagePeriod(label: $0.displayName, period: $0.period)
+                },
                 sevenDayOauthApps: sevenDayOauthApps?.period,
                 sevenDayCowork: sevenDayCowork?.period,
                 iguanaNecktie: iguanaNecktie?.period,
@@ -417,6 +613,7 @@ private enum UsageResponseParser {
                 ("seven_day", ["seven_day", "sevenday", "weekly", "weekly_limit"]),
                 ("seven_day_opus", ["seven_day_opus", "sevendayopus", "opus"]),
                 ("seven_day_sonnet", ["seven_day_sonnet", "sevendaysonnet", "sonnet"]),
+                ("weekly_scoped", ["weekly_scoped", "seven_day_scoped", "sevendayscoped", "fable"]),
                 ("seven_day_oauth_apps", ["seven_day_oauth_apps", "oauth_apps", "oauthapps"]),
                 ("seven_day_cowork", ["seven_day_cowork", "cowork"]),
                 ("iguana_necktie", ["iguana_necktie", "iguananecktie"]),
@@ -457,7 +654,7 @@ private enum UsageResponseParser {
 
             let utilization = firstNumber(
                 in: dictionary,
-                keys: ["utilization", "percentage", "percent_used", "used_percent", "usage_percent"]
+                keys: ["utilization", "percent", "percentage", "percent_used", "used_percent", "usage_percent"]
             ) ?? derivedUtilization(from: dictionary)
 
             guard let utilization else { return nil }
@@ -490,13 +687,37 @@ private enum UsageResponseParser {
         }
 
         private func candidateName(from dictionary: [String: Any], path: [String]) -> String {
+            if isScopedWeekly(dictionary),
+               let displayName = modelDisplayName(from: dictionary) {
+                return displayName
+            }
+
             for key in ["name", "label", "title", "slug", "model", "kind", "type"] {
                 if let value = dictionary[key] as? String, !value.isEmpty {
                     return value
                 }
             }
+            if let displayName = modelDisplayName(from: dictionary) {
+                return displayName
+            }
 
             return path.last(where: { !$0.hasPrefix("[") }) ?? "usage"
+        }
+
+        private func isScopedWeekly(_ dictionary: [String: Any]) -> Bool {
+            let kind = (dictionary["kind"] as? String).map(normalize) ?? ""
+            let group = (dictionary["group"] as? String).map(normalize) ?? ""
+            return kind == "weekly_scoped" || group == "weekly"
+        }
+
+        private func modelDisplayName(from dictionary: [String: Any]) -> String? {
+            guard let scope = dictionary["scope"] as? [String: Any],
+                  let model = scope["model"] as? [String: Any],
+                  let displayName = model["display_name"] as? String,
+                  !displayName.isEmpty else {
+                return nil
+            }
+            return displayName
         }
 
         private func deduplicatedCandidates() -> [CandidatePeriod] {
@@ -589,6 +810,17 @@ private enum UsageResponseParser {
             return containsAny(name, ["sonnet"]) ? 260 : 0
         }
 
+        private func scopedWeeklyScore(_ candidate: CandidatePeriod) -> Int {
+            let name = normalizedName(candidate)
+            guard containsAny(name, ["weekly_scoped", "seven_day_scoped", "fable"]) else {
+                return 0
+            }
+            if containsAny(name, ["opus", "sonnet", "oauth", "cowork"]) {
+                return 0
+            }
+            return 240
+        }
+
         private func oauthAppsScore(_ candidate: CandidatePeriod) -> Int {
             let name = normalizedName(candidate)
             return containsAny(name, ["oauth", "apps"]) ? 220 : 0
@@ -652,6 +884,12 @@ private enum UsageResponseParser {
             let name: String
             let path: [String]
             let period: UsageResponse.UsagePeriod
+
+            var displayName: String {
+                let normalized = name
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return normalized.isEmpty ? "Scoped" : normalized
+            }
         }
     }
 

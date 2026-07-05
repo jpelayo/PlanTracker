@@ -109,13 +109,37 @@ actor UsagePollingService {
         let sevenDayReset = usage.sevenDay?.resetsAt.flatMap(parseDate)
         let sevenDayOpusReset = usage.sevenDayOpus?.resetsAt.flatMap(parseDate)
         let sevenDaySonnetReset = usage.sevenDaySonnet?.resetsAt.flatMap(parseDate)
+        let sevenDayScopedReset = usage.sevenDayScoped?.period.resetsAt.flatMap(parseDate)
         let extraUsageReset = usage.extraUsage?.resetsAt.flatMap(parseDate)
 
+        let spendLimit = usage.spend?.limit?.amountMinor
+            ?? usage.spend?.cap?.credits?.amountMinor
+            ?? billing?.overageMonthlyLimit
+        let spendUsed = usage.spend?.used?.amountMinor ?? billing?.overageUsedCredits
+        let spendCurrency = usage.spend?.used?.currency
+            ?? usage.spend?.limit?.currency
+            ?? usage.spend?.balance?.currency
+            ?? billing?.overageCurrency
+        let spendEnabled = usage.spend?.enabled ?? billing?.overageEnabled
+        let spendOutOfCredits = billing?.overageOutOfCredits
+
+        let prepaidRemaining: Int?
+        let prepaidTotal: Int?
+        let prepaidCurrency: String?
+        if let spend = usage.spend {
+            prepaidRemaining = spend.balance?.amountMinor
+            prepaidTotal = spend.balance == nil ? nil : billing?.prepaidCreditsTotal
+            prepaidCurrency = spend.balance?.currency ?? spendCurrency
+        } else {
+            prepaidRemaining = billing?.prepaidCreditsRemaining
+            prepaidTotal = billing?.prepaidCreditsTotal
+            prepaidCurrency = billing?.prepaidCreditsCurrency
+        }
+
         let hasMonetaryOverage = {
-            guard let billing else { return false }
-            guard let monthlyLimit = billing.overageMonthlyLimit,
-                  let usedCredits = billing.overageUsedCredits,
-                  let currency = billing.overageCurrency else {
+            guard let monthlyLimit = spendLimit,
+                  let usedCredits = spendUsed,
+                  let currency = spendCurrency else {
                 return false
             }
             return monthlyLimit > 0 && usedCredits >= 0 && !currency.isEmpty
@@ -134,19 +158,22 @@ actor UsagePollingService {
             sevenDayOpusResetsAt: sevenDayOpusReset,
             sevenDaySonnetUtilization: usage.sevenDaySonnet?.utilization,
             sevenDaySonnetResetsAt: sevenDaySonnetReset,
+            sevenDayScopedLabel: usage.sevenDayScoped?.label,
+            sevenDayScopedUtilization: usage.sevenDayScoped?.period.utilization,
+            sevenDayScopedResetsAt: sevenDayScopedReset,
             extraUsageUtilization: canonicalExtraUsageUtilization,
             extraUsageResetsAt: canonicalExtraUsageReset,
             planTier: organization.planTier,
             planDisplayNameOverride: organization.planDisplayNameOverride,
-            prepaidCreditsRemaining: billing?.prepaidCreditsRemaining,
-            prepaidCreditsTotal: billing?.prepaidCreditsTotal,
-            prepaidCreditsCurrency: billing?.prepaidCreditsCurrency,
+            prepaidCreditsRemaining: prepaidRemaining,
+            prepaidCreditsTotal: prepaidTotal,
+            prepaidCreditsCurrency: prepaidCurrency,
             prepaidAutoReloadEnabled: billing?.prepaidAutoReloadEnabled,
-            overageMonthlyLimit: billing?.overageMonthlyLimit,
-            overageUsedCredits: billing?.overageUsedCredits,
-            overageCurrency: billing?.overageCurrency,
-            overageEnabled: canonicalOverageEnabled,
-            overageOutOfCredits: billing?.overageOutOfCredits
+            overageMonthlyLimit: spendLimit,
+            overageUsedCredits: spendUsed,
+            overageCurrency: spendCurrency,
+            overageEnabled: usage.spend == nil ? canonicalOverageEnabled : spendEnabled,
+            overageOutOfCredits: spendOutOfCredits
         )
     }
 
