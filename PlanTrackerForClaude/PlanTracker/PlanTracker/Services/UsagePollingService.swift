@@ -112,28 +112,45 @@ actor UsagePollingService {
         let sevenDayScopedReset = usage.sevenDayScoped?.period.resetsAt.flatMap(parseDate)
         let extraUsageReset = usage.extraUsage?.resetsAt.flatMap(parseDate)
 
-        let spendLimit = usage.spend?.limit?.amountMinor
-            ?? usage.spend?.cap?.credits?.amountMinor
-            ?? billing?.overageMonthlyLimit
-        let spendUsed = usage.spend?.used?.amountMinor ?? billing?.overageUsedCredits
-        let spendCurrency = usage.spend?.used?.currency
-            ?? usage.spend?.limit?.currency
-            ?? usage.spend?.balance?.currency
-            ?? billing?.overageCurrency
-        let spendEnabled = usage.spend?.enabled ?? billing?.overageEnabled
+        let usageReportsExtraSpendDisabled = usage.spend?.enabled == false || usage.extraUsageEnabled == false
+        let spendLimit: Int?
+        let spendUsed: Int?
+        let spendCurrency: String?
+        let spendEnabled: Bool?
+
+        if let spend = usage.spend {
+            spendLimit = usageReportsExtraSpendDisabled ? nil : (spend.limit?.amountMinor ?? spend.cap?.credits?.amountMinor)
+            spendUsed = spend.used?.amountMinor
+            spendCurrency = spend.used?.currency
+                ?? spend.limit?.currency
+                ?? spend.balance?.currency
+            spendEnabled = spend.enabled ?? usage.extraUsageEnabled
+        } else if usageReportsExtraSpendDisabled {
+            spendLimit = nil
+            spendUsed = nil
+            spendCurrency = nil
+            spendEnabled = false
+        } else {
+            spendLimit = billing?.overageMonthlyLimit
+            spendUsed = billing?.overageUsedCredits
+            spendCurrency = billing?.overageCurrency
+            spendEnabled = usage.extraUsageEnabled ?? billing?.overageEnabled
+        }
         let spendOutOfCredits = billing?.overageOutOfCredits
 
         let prepaidRemaining: Int?
         let prepaidTotal: Int?
         let prepaidCurrency: String?
         if let spend = usage.spend {
-            prepaidRemaining = spend.balance?.amountMinor
-            prepaidTotal = spend.balance == nil ? nil : billing?.prepaidCreditsTotal
-            prepaidCurrency = spend.balance?.currency ?? spendCurrency
+            let normalizedBalance = Self.normalizedPrepaidCreditsRemaining(spend.balance?.amountMinor)
+            prepaidRemaining = normalizedBalance
+            prepaidTotal = Self.hasDisplayablePrepaidCredits(normalizedBalance) ? billing?.prepaidCreditsTotal : nil
+            prepaidCurrency = Self.hasDisplayablePrepaidCredits(normalizedBalance) ? (spend.balance?.currency ?? spendCurrency) : nil
         } else {
-            prepaidRemaining = billing?.prepaidCreditsRemaining
-            prepaidTotal = billing?.prepaidCreditsTotal
-            prepaidCurrency = billing?.prepaidCreditsCurrency
+            let normalizedBalance = Self.normalizedPrepaidCreditsRemaining(billing?.prepaidCreditsRemaining)
+            prepaidRemaining = normalizedBalance
+            prepaidTotal = Self.hasDisplayablePrepaidCredits(normalizedBalance) ? billing?.prepaidCreditsTotal : nil
+            prepaidCurrency = Self.hasDisplayablePrepaidCredits(normalizedBalance) ? billing?.prepaidCreditsCurrency : nil
         }
 
         let hasMonetaryOverage = {
@@ -142,12 +159,12 @@ actor UsagePollingService {
                   let currency = spendCurrency else {
                 return false
             }
-            return monthlyLimit > 0 && usedCredits >= 0 && !currency.isEmpty
+            return !usageReportsExtraSpendDisabled && monthlyLimit > 0 && usedCredits >= 0 && !currency.isEmpty
         }()
 
         let canonicalExtraUsageUtilization = hasMonetaryOverage ? nil : usage.extraUsage?.utilization
         let canonicalExtraUsageReset = hasMonetaryOverage ? nil : extraUsageReset
-        let canonicalOverageEnabled: Bool? = hasMonetaryOverage ? true : billing?.overageEnabled
+        let canonicalOverageEnabled: Bool? = spendEnabled ?? (hasMonetaryOverage ? true : billing?.overageEnabled)
 
         return UsageData(
             fiveHourUtilization: usage.fiveHour?.utilization,
@@ -172,7 +189,7 @@ actor UsagePollingService {
             overageMonthlyLimit: spendLimit,
             overageUsedCredits: spendUsed,
             overageCurrency: spendCurrency,
-            overageEnabled: usage.spend == nil ? canonicalOverageEnabled : spendEnabled,
+            overageEnabled: canonicalOverageEnabled,
             overageOutOfCredits: spendOutOfCredits
         )
     }
@@ -233,12 +250,17 @@ actor UsagePollingService {
             var autoReloadEnabled: Bool?
 
             if let prepaidCredits {
-                prepaidRemaining = prepaidCredits.amount
+                prepaidRemaining = Self.normalizedPrepaidCreditsRemaining(prepaidCredits.amount)
                 prepaidCurrency = prepaidCredits.currency
                 autoReloadEnabled = prepaidCredits.autoReloadSettings?.enabled ?? false
                 if let creditGrant, creditGrant.granted {
                     prepaidTotal = creditGrant.amountMinorUnits
                 }
+            }
+
+            if !Self.hasDisplayablePrepaidCredits(prepaidRemaining) {
+                prepaidTotal = nil
+                prepaidCurrency = nil
             }
 
             let resolved = BillingSnapshot(
@@ -351,5 +373,16 @@ actor UsagePollingService {
             return nil
         }
         return "\(value)x"
+    }
+
+    private static func normalizedPrepaidCreditsRemaining(_ amount: Int?) -> Int? {
+        guard let amount else { return nil }
+        let normalized = max(0, amount)
+        return normalized <= UsageData.cosmeticPrepaidResidueThresholdMinorUnits ? 0 : normalized
+    }
+
+    private static func hasDisplayablePrepaidCredits(_ amount: Int?) -> Bool {
+        guard let amount else { return false }
+        return amount > UsageData.cosmeticPrepaidResidueThresholdMinorUnits
     }
 }

@@ -6,6 +6,8 @@
 import Foundation
 
 struct UsageData: Codable, Sendable, Equatable {
+    nonisolated static let cosmeticPrepaidResidueThresholdMinorUnits = 1
+
     let fiveHourUtilization: Double?
     let fiveHourResetsAt: Date?
     let sevenDayUtilization: Double?
@@ -94,6 +96,7 @@ struct UsageData: Codable, Sendable, Equatable {
     }
 
     var prepaidCreditsUtilization: Double? {
+        guard hasAvailablePrepaidCredits else { return nil }
         guard let total = prepaidCreditsTotal,
               total > 0 else { return nil }
         let remaining = effectivePrepaidCreditsRemaining
@@ -102,6 +105,7 @@ struct UsageData: Codable, Sendable, Equatable {
     }
 
     var prepaidCreditsRemainingRatio: Double? {
+        guard hasAvailablePrepaidCredits else { return nil }
         guard let total = prepaidCreditsTotal,
               total > 0 else { return nil }
         let remaining = effectivePrepaidCreditsRemaining
@@ -109,17 +113,20 @@ struct UsageData: Codable, Sendable, Equatable {
     }
 
     var prepaidCreditsRemainingFormatted: String? {
+        guard hasAvailablePrepaidCredits else { return nil }
         guard let currency = prepaidCreditsCurrency else { return nil }
         return formatCurrency(amount: effectivePrepaidCreditsRemaining, currency: currency)
     }
 
     var prepaidCreditsTotalFormatted: String? {
+        guard hasAvailablePrepaidCredits else { return nil }
         guard let total = prepaidCreditsTotal,
               let currency = prepaidCreditsCurrency else { return nil }
         return formatCurrency(amount: total, currency: currency)
     }
 
     var prepaidCreditsSpent: Int? {
+        guard hasAvailablePrepaidCredits else { return nil }
         guard let total = prepaidCreditsTotal else { return nil }
         let remaining = effectivePrepaidCreditsRemaining
         return max(0, min(total, total - remaining))
@@ -206,7 +213,7 @@ struct UsageData: Codable, Sendable, Equatable {
     private var effectivePrepaidCreditsRemaining: Int {
         let remaining = max(0, prepaidCreditsRemaining ?? 0)
         // Claude can return a one-cent residue for an empty prepaid balance.
-        return remaining <= 1 ? 0 : remaining
+        return remaining <= Self.cosmeticPrepaidResidueThresholdMinorUnits ? 0 : remaining
     }
 
     var overageLimitFormatted: String? {

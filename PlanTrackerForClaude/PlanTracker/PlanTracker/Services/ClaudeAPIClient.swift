@@ -226,7 +226,7 @@ actor ClaudeAPIClient {
 
 // MARK: - Response Models
 
-struct BootstrapResponse: Codable, Sendable {
+nonisolated struct BootstrapResponse: Codable, Sendable {
     let account: Account?
 
     struct Account: Codable, Sendable {
@@ -236,7 +236,7 @@ struct BootstrapResponse: Codable, Sendable {
     }
 }
 
-struct Organization: Codable, Sendable {
+nonisolated struct Organization: Codable, Sendable {
     let uuid: String?
     let name: String?
     let rateLimitTier: String?
@@ -249,7 +249,7 @@ struct Organization: Codable, Sendable {
     }
 }
 
-struct UsageResponse: Decodable, Sendable {
+nonisolated struct UsageResponse: Decodable, Sendable {
     let fiveHour: UsagePeriod?
     let sevenDay: UsagePeriod?
     let sevenDayOpus: UsagePeriod?
@@ -259,6 +259,7 @@ struct UsageResponse: Decodable, Sendable {
     let sevenDayCowork: UsagePeriod?
     let iguanaNecktie: UsagePeriod?
     let extraUsage: UsagePeriod?
+    let extraUsageEnabled: Bool?
     let spend: Spend?
 
     private enum CodingKeys: String, CodingKey {
@@ -284,6 +285,7 @@ struct UsageResponse: Decodable, Sendable {
         sevenDayCowork: UsagePeriod?,
         iguanaNecktie: UsagePeriod?,
         extraUsage: UsagePeriod?,
+        extraUsageEnabled: Bool? = nil,
         spend: Spend? = nil
     ) {
         self.fiveHour = fiveHour
@@ -295,6 +297,7 @@ struct UsageResponse: Decodable, Sendable {
         self.sevenDayCowork = sevenDayCowork
         self.iguanaNecktie = iguanaNecktie
         self.extraUsage = extraUsage
+        self.extraUsageEnabled = extraUsageEnabled
         self.spend = spend
     }
 
@@ -313,7 +316,8 @@ struct UsageResponse: Decodable, Sendable {
         sevenDayOauthApps = try container.decodeIfPresent(UsagePeriod.self, forKey: .sevenDayOauthApps)
         sevenDayCowork = try container.decodeIfPresent(UsagePeriod.self, forKey: .sevenDayCowork)
         iguanaNecktie = try container.decodeIfPresent(UsagePeriod.self, forKey: .iguanaNecktie)
-        extraUsage = try container.decodeIfPresent(UsagePeriod.self, forKey: .extraUsage)
+        extraUsage = try? container.decodeIfPresent(UsagePeriod.self, forKey: .extraUsage)
+        extraUsageEnabled = try container.decodeIfPresent(ExtraUsageMetadata.self, forKey: .extraUsage)?.isEnabled
         spend = try container.decodeIfPresent(Spend.self, forKey: .spend)
     }
 
@@ -364,6 +368,10 @@ struct UsageResponse: Decodable, Sendable {
         struct Cap: Decodable, Sendable {
             let credits: MoneyAmount?
         }
+    }
+
+    struct ExtraUsageMetadata: Decodable, Sendable {
+        let isEnabled: Bool?
     }
 
     struct MoneyAmount: Decodable, Sendable {
@@ -540,7 +548,7 @@ struct UsageResponse: Decodable, Sendable {
     }
 }
 
-private enum UsageResponseParser {
+private nonisolated enum UsageResponseParser {
     static func parse(from json: Any) -> UsageResponse? {
         var collector = Collector()
         collector.walk(json, path: [])
@@ -549,6 +557,7 @@ private enum UsageResponseParser {
 
     private struct Collector {
         private var candidates: [CandidatePeriod] = []
+        private var extraUsageEnabled: Bool?
 
         mutating func walk(_ value: Any, path: [String]) {
             if let dictionary = value as? [String: Any] {
@@ -567,6 +576,11 @@ private enum UsageResponseParser {
         }
 
         mutating func inspect(dictionary: [String: Any], path: [String]) {
+            if extraUsageEnabled == nil,
+               path.contains(where: { normalize($0) == "extra_usage" || normalize($0) == "extrausage" }) {
+                extraUsageEnabled = firstBool(in: dictionary, keys: ["is_enabled", "isEnabled", "enabled"])
+            }
+
             if let direct = directPeriods(from: dictionary) {
                 candidates.append(contentsOf: direct)
             }
@@ -603,7 +617,8 @@ private enum UsageResponseParser {
                 sevenDayOauthApps: sevenDayOauthApps?.period,
                 sevenDayCowork: sevenDayCowork?.period,
                 iguanaNecktie: iguanaNecktie?.period,
-                extraUsage: extraUsage?.period
+                extraUsage: extraUsage?.period,
+                extraUsageEnabled: extraUsageEnabled
             )
         }
 
@@ -748,6 +763,28 @@ private enum UsageResponseParser {
             for key in keys {
                 if let value = dictionary[key] as? String, !value.isEmpty {
                     return value
+                }
+            }
+            return nil
+        }
+
+        private func firstBool(in dictionary: [String: Any], keys: [String]) -> Bool? {
+            for key in keys {
+                if let value = dictionary[key] as? Bool {
+                    return value
+                }
+                if let number = dictionary[key] as? NSNumber {
+                    return number.boolValue
+                }
+                if let string = dictionary[key] as? String {
+                    switch string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+                    case "true", "yes", "1":
+                        return true
+                    case "false", "no", "0":
+                        return false
+                    default:
+                        continue
+                    }
                 }
             }
             return nil
@@ -929,7 +966,7 @@ struct SettingsResponse: Codable, Sendable {
     }
 }
 
-struct PrepaidCreditsResponse: Codable, Sendable {
+nonisolated struct PrepaidCreditsResponse: Codable, Sendable {
     let amount: Int  // Amount in minor units (cents)
     let currency: String
     let autoReloadSettings: AutoReloadSettings?
@@ -939,7 +976,7 @@ struct PrepaidCreditsResponse: Codable, Sendable {
     }
 }
 
-struct OverageCreditGrantResponse: Codable, Sendable {
+nonisolated struct OverageCreditGrantResponse: Codable, Sendable {
     let available: Bool
     let eligible: Bool
     let granted: Bool
@@ -947,7 +984,7 @@ struct OverageCreditGrantResponse: Codable, Sendable {
     let currency: String
 }
 
-struct OverageSpendLimitResponse: Codable, Sendable {
+nonisolated struct OverageSpendLimitResponse: Codable, Sendable {
     let isEnabled: Bool
     let monthlyCreditLimit: Int   // Minor units (cents)
     let currency: String
