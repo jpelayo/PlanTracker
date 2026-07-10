@@ -30,6 +30,22 @@ struct PlanTrackerTests {
         #expect(usage.prepaidCreditsUtilization == nil)
     }
 
+    @Test func prepaidCreditAboveResidueThresholdIsVisibleAtZeroUsage() {
+        let usage = makeUsageData(
+            prepaidCreditsRemaining: 2,
+            prepaidCreditsTotal: nil,
+            prepaidCreditsCurrency: "USD",
+            overageMonthlyLimit: nil,
+            overageUsedCredits: 0,
+            overageCurrency: "USD",
+            overageEnabled: false
+        )
+
+        #expect(usage.hasAvailablePrepaidCredits == true)
+        #expect(usage.prepaidCreditsRemainingFormatted == "0.02 USD")
+        #expect(usage.prepaidCreditsUtilization == 0)
+    }
+
     @Test func oneCentPrepaidResidueDoesNotOffsetBillableExtraSpend() {
         let usage = makeUsageData(
             prepaidCreditsRemaining: 1,
@@ -43,6 +59,41 @@ struct PlanTrackerTests {
 
         #expect(usage.billableExtraUsageFormatted == "1.25 USD")
         #expect(usage.billableExtraUsageWithCapFormatted == "1.25 USD / 5.00 USD")
+    }
+
+    @Test func prepaidBalanceWithoutGrantTotalStillHasProgressDenominator() {
+        let usage = makeUsageData(
+            prepaidCreditsRemaining: 20001,
+            prepaidCreditsTotal: nil,
+            prepaidCreditsCurrency: "USD",
+            overageMonthlyLimit: nil,
+            overageUsedCredits: 0,
+            overageCurrency: "USD",
+            overageEnabled: true
+        )
+
+        #expect(usage.hasAvailablePrepaidCredits == true)
+        #expect(usage.prepaidCreditsRemainingFormatted == "200.01 USD")
+        #expect(usage.prepaidCreditsTotalFormatted == "200.01 USD")
+        #expect(usage.prepaidCreditsSpentFormatted == "0.00 USD")
+        #expect(usage.prepaidCreditsUtilization == 0)
+    }
+
+    @Test func freeCreditConsumptionIsNotShownAsBillableExtraSpend() {
+        let usage = makeUsageData(
+            prepaidCreditsRemaining: 19501,
+            prepaidCreditsTotal: nil,
+            prepaidCreditsCurrency: "USD",
+            overageMonthlyLimit: 500,
+            overageUsedCredits: 500,
+            overageCurrency: "USD",
+            overageEnabled: true
+        )
+
+        #expect(usage.prepaidCreditsTotalFormatted == "200.01 USD")
+        #expect(usage.prepaidCreditsSpentFormatted == "5.00 USD")
+        #expect(usage.billableExtraUsageFormatted == nil)
+        #expect(usage.billableExtraUsageWithCapFormatted == nil)
     }
 
     @Test func claudeUsageDecodesDisabledExtraSpendControlObject() throws {

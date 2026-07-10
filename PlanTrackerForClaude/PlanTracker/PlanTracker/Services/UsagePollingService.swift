@@ -142,10 +142,21 @@ actor UsagePollingService {
         let prepaidTotal: Int?
         let prepaidCurrency: String?
         if let spend = usage.spend {
-            let normalizedBalance = Self.normalizedPrepaidCreditsRemaining(spend.balance?.amountMinor)
-            prepaidRemaining = normalizedBalance
-            prepaidTotal = Self.hasDisplayablePrepaidCredits(normalizedBalance) ? billing?.prepaidCreditsTotal : nil
-            prepaidCurrency = Self.hasDisplayablePrepaidCredits(normalizedBalance) ? (spend.balance?.currency ?? spendCurrency) : nil
+            // `/usage` may include `spend` while omitting its balance. Keep the
+            // dedicated prepaid endpoint as a fallback so untouched free credit
+            // still renders as a 0% gauge.
+            let usageBalance = Self.normalizedPrepaidCreditsRemaining(spend.balance?.amountMinor)
+            let billingBalance = Self.normalizedPrepaidCreditsRemaining(billing?.prepaidCreditsRemaining)
+            let prefersUsageBalance = Self.hasDisplayablePrepaidCredits(usageBalance)
+            let resolvedBalance = prefersUsageBalance ? usageBalance : billingBalance
+
+            prepaidRemaining = resolvedBalance
+            prepaidTotal = Self.hasDisplayablePrepaidCredits(resolvedBalance) ? billing?.prepaidCreditsTotal : nil
+            prepaidCurrency = Self.hasDisplayablePrepaidCredits(resolvedBalance)
+                ? (prefersUsageBalance
+                    ? (spend.balance?.currency ?? billing?.prepaidCreditsCurrency ?? spendCurrency)
+                    : billing?.prepaidCreditsCurrency)
+                : nil
         } else {
             let normalizedBalance = Self.normalizedPrepaidCreditsRemaining(billing?.prepaidCreditsRemaining)
             prepaidRemaining = normalizedBalance

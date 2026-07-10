@@ -97,7 +97,7 @@ struct UsageData: Codable, Sendable, Equatable {
 
     var prepaidCreditsUtilization: Double? {
         guard hasAvailablePrepaidCredits else { return nil }
-        guard let total = prepaidCreditsTotal,
+        guard let total = effectivePrepaidCreditsTotal,
               total > 0 else { return nil }
         let remaining = effectivePrepaidCreditsRemaining
         let used = Double(max(0, min(total, total - remaining)))
@@ -106,7 +106,7 @@ struct UsageData: Codable, Sendable, Equatable {
 
     var prepaidCreditsRemainingRatio: Double? {
         guard hasAvailablePrepaidCredits else { return nil }
-        guard let total = prepaidCreditsTotal,
+        guard let total = effectivePrepaidCreditsTotal,
               total > 0 else { return nil }
         let remaining = effectivePrepaidCreditsRemaining
         return Double(max(0, min(remaining, total))) / Double(total)
@@ -120,14 +120,14 @@ struct UsageData: Codable, Sendable, Equatable {
 
     var prepaidCreditsTotalFormatted: String? {
         guard hasAvailablePrepaidCredits else { return nil }
-        guard let total = prepaidCreditsTotal,
+        guard let total = effectivePrepaidCreditsTotal,
               let currency = prepaidCreditsCurrency else { return nil }
         return formatCurrency(amount: total, currency: currency)
     }
 
     var prepaidCreditsSpent: Int? {
         guard hasAvailablePrepaidCredits else { return nil }
-        guard let total = prepaidCreditsTotal else { return nil }
+        guard let total = effectivePrepaidCreditsTotal else { return nil }
         let remaining = effectivePrepaidCreditsRemaining
         return max(0, min(total, total - remaining))
     }
@@ -192,8 +192,8 @@ struct UsageData: Codable, Sendable, Equatable {
             return nil
         }
 
-        let prepaidRemaining = effectivePrepaidCreditsRemaining
-        let billableAmount = max(0, used - prepaidRemaining)
+        let prepaidCoverage = effectivePrepaidCreditsTotal ?? effectivePrepaidCreditsRemaining
+        let billableAmount = max(0, used - prepaidCoverage)
         guard billableAmount > 0 else { return nil }
         return formatCurrency(amount: billableAmount, currency: currency)
     }
@@ -214,6 +214,15 @@ struct UsageData: Codable, Sendable, Equatable {
         let remaining = max(0, prepaidCreditsRemaining ?? 0)
         // Claude can return a one-cent residue for an empty prepaid balance.
         return remaining <= Self.cosmeticPrepaidResidueThresholdMinorUnits ? 0 : remaining
+    }
+
+    private var effectivePrepaidCreditsTotal: Int? {
+        let remaining = effectivePrepaidCreditsRemaining
+        guard remaining > 0 else { return nil }
+
+        let declaredTotal = max(0, prepaidCreditsTotal ?? 0)
+        let derivedTotal = remaining + max(0, overageUsedCredits ?? 0)
+        return max(declaredTotal, derivedTotal, remaining)
     }
 
     var overageLimitFormatted: String? {
