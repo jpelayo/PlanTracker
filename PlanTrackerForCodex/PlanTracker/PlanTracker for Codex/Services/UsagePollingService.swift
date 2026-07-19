@@ -132,7 +132,7 @@ actor UsagePollingService {
         return cachedPlanTier
     }
 
-    private func mapLimitsToSlots(_ limits: [OpenAIUsageLimit]) -> (
+    func mapLimitsToSlots(_ limits: [OpenAIUsageLimit]) -> (
         first: OpenAIUsageLimit?,
         second: OpenAIUsageLimit?,
         third: OpenAIUsageLimit?,
@@ -146,17 +146,18 @@ actor UsagePollingService {
         var remaining = limits
         var slots: [OpenAIUsageLimit?] = Array(repeating: nil, count: 5)
 
-        let fixedNameToSlot: [String: Int] = [
-            "primary_window": 0,
-            "secondary_window": 1,
-            "weekly_window": 1,
-            "tertiary_window": 2,
-            "quaternary_window": 3
+        let fixedNameToSlot: [(name: String, slotIndex: Int)] = [
+            ("primary_window", 0),
+            ("secondary_window", 1),
+            ("weekly_window", 1),
+            ("tertiary_window", 2),
+            ("quaternary_window", 3)
         ]
 
-        for (fixedName, slotIndex) in fixedNameToSlot where slots[slotIndex] == nil {
-            slots[slotIndex] = popFirst(from: &remaining) {
-                normalizedName(of: $0) == fixedName
+        for fixedLimit in fixedNameToSlot where slots[fixedLimit.slotIndex] == nil {
+            slots[fixedLimit.slotIndex] = popFirst(from: &remaining) {
+                normalizedName(of: $0) == fixedLimit.name
+                    && isCompatibleWithSlot($0, slotIndex: fixedLimit.slotIndex)
             }
         }
 
@@ -236,6 +237,8 @@ actor UsagePollingService {
     }
 
     private func fiveHourScore(_ limit: OpenAIUsageLimit) -> Int {
+        guard isPlausibleFiveHourWindow(limit) else { return .min }
+
         let normalized = normalizedName(of: limit)
         var score = 0
 
@@ -258,6 +261,8 @@ actor UsagePollingService {
     }
 
     private func sevenDayScore(_ limit: OpenAIUsageLimit) -> Int {
+        guard isPlausibleWeeklyWindow(limit) else { return .min }
+
         let normalized = normalizedName(of: limit)
         var score = 0
 
@@ -303,6 +308,8 @@ actor UsagePollingService {
     }
 
     private func modelFiveHourScore(_ limit: OpenAIUsageLimit) -> Int {
+        guard isPlausibleFiveHourWindow(limit) else { return .min }
+
         let normalized = normalizedName(of: limit)
         let tokens = tokenSet(of: limit)
         var score = 0
@@ -327,6 +334,8 @@ actor UsagePollingService {
     }
 
     private func modelWeeklyScore(_ limit: OpenAIUsageLimit) -> Int {
+        guard isPlausibleWeeklyWindow(limit) else { return .min }
+
         let normalized = normalizedName(of: limit)
         let tokens = tokenSet(of: limit)
         var score = 0
@@ -350,6 +359,28 @@ actor UsagePollingService {
     private func hoursUntilReset(for limit: OpenAIUsageLimit) -> Double? {
         guard let resetsAt = limit.resetsAt else { return nil }
         return resetsAt.timeIntervalSinceNow / 3600
+    }
+
+    private func isCompatibleWithSlot(_ limit: OpenAIUsageLimit, slotIndex: Int) -> Bool {
+        switch slotIndex {
+        case 0, 2:
+            return isPlausibleFiveHourWindow(limit)
+        case 1, 3:
+            return isPlausibleWeeklyWindow(limit)
+        default:
+            return true
+        }
+    }
+
+    private func isPlausibleFiveHourWindow(_ limit: OpenAIUsageLimit) -> Bool {
+        guard let hours = hoursUntilReset(for: limit) else { return true }
+        // Allow a small clock skew around reset, but never call a multi-day limit "5-hour".
+        return hours >= -0.25 && hours <= 12
+    }
+
+    private func isPlausibleWeeklyWindow(_ limit: OpenAIUsageLimit) -> Bool {
+        guard let hours = hoursUntilReset(for: limit) else { return true }
+        return hours >= 12 && hours <= 240
     }
 
     private func normalizedName(of limit: OpenAIUsageLimit) -> String {
