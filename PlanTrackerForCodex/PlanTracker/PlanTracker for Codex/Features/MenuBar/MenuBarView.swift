@@ -428,8 +428,8 @@ struct MenuBarView: View {
 
     private func colorForUtilization(_ utilization: Double) -> Color {
         switch utilization {
-        case ..<50: .green
-        case 50..<80: .yellow
+        case ..<65: .green
+        case 65..<90: Color(red: 0.72, green: 0.46, blue: 0.02)
         default: .red
         }
     }
