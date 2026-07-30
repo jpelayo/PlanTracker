@@ -26,7 +26,12 @@ struct UsageData: Codable, Sendable, Equatable {
     let prepaidCreditsRemaining: Int?  // Minor units (cents)
     let prepaidCreditsTotal: Int?      // Minor units (cents)
     let prepaidCreditsCurrency: String?
+    let prepaidCreditsArePromotional: Bool?
     let prepaidAutoReloadEnabled: Bool?
+    let paidCreditsRemaining: Int?
+    let paidCreditsTotal: Int?
+    let paidCreditsCurrency: String?
+    let pendingInvoiceAmount: Int?
     let overageMonthlyLimit: Int?      // Minor units (cents)
     let overageUsedCredits: Int?       // Minor units (cents)
     let overageCurrency: String?
@@ -34,11 +39,16 @@ struct UsageData: Codable, Sendable, Equatable {
     let overageOutOfCredits: Bool?
 
     var hasMonetaryExtraCredits: Bool {
-        hasAvailablePrepaidCredits || hasStartedExtraUsageSpend
+        hasAvailablePrepaidCredits
+            || hasAvailablePaidCredits
+            || pendingInvoiceFormatted != nil
+            || hasStartedExtraUsageSpend
     }
 
     var hasExtraUsageAccounting: Bool {
         hasAvailablePrepaidCredits
+            || hasAvailablePaidCredits
+            || pendingInvoiceFormatted != nil
             || overageEnabled == true
             || overageMonthlyLimit != nil
             || overageUsedCredits != nil
@@ -47,6 +57,47 @@ struct UsageData: Codable, Sendable, Equatable {
     var hasAvailablePrepaidCredits: Bool {
         guard let currency = prepaidCreditsCurrency else { return false }
         return effectivePrepaidCreditsRemaining > 0 && !currency.isEmpty
+    }
+
+    var hasAvailablePaidCredits: Bool {
+        guard let currency = paidCreditsCurrency else { return false }
+        return effectivePaidCreditsRemaining > 0 && !currency.isEmpty
+    }
+
+    var paidCreditsRemainingFormatted: String? {
+        guard hasAvailablePaidCredits, let currency = paidCreditsCurrency else { return nil }
+        return formatCurrency(amount: effectivePaidCreditsRemaining, currency: currency)
+    }
+
+    var paidCreditsTotalFormatted: String? {
+        guard hasAvailablePaidCredits, let currency = paidCreditsCurrency else { return nil }
+        return formatCurrency(amount: effectivePaidCreditsTotal, currency: currency)
+    }
+
+    var paidCreditsSpentValueFormatted: String? {
+        guard hasAvailablePaidCredits else { return nil }
+        return formatCurrencyValue(amount: max(0, effectivePaidCreditsTotal - effectivePaidCreditsRemaining))
+    }
+
+    var paidCreditsUtilization: Double? {
+        guard hasAvailablePaidCredits, effectivePaidCreditsTotal > 0 else { return nil }
+        return Double(max(0, effectivePaidCreditsTotal - effectivePaidCreditsRemaining))
+            / Double(effectivePaidCreditsTotal) * 100
+    }
+
+    var pendingInvoiceFormatted: String? {
+        guard let amount = pendingInvoiceAmount,
+              amount > Self.cosmeticPrepaidResidueThresholdMinorUnits,
+              let currency = overageCurrency ?? paidCreditsCurrency ?? prepaidCreditsCurrency else { return nil }
+        return formatCurrency(amount: amount, currency: currency)
+    }
+
+    var pendingInvoiceUtilization: Double? {
+        guard let amount = pendingInvoiceAmount,
+              amount > Self.cosmeticPrepaidResidueThresholdMinorUnits,
+              let limit = overageMonthlyLimit,
+              limit > 0 else { return nil }
+        return Double(amount) / Double(limit) * 100
     }
 
     var hasStartedExtraUsageSpend: Bool {
@@ -138,9 +189,17 @@ struct UsageData: Codable, Sendable, Equatable {
         return formatCurrency(amount: spent, currency: currency)
     }
 
+    var prepaidCreditsSpentValueFormatted: String? {
+        guard let spent = prepaidCreditsSpent else { return nil }
+        return formatCurrencyValue(amount: spent)
+    }
+
     private func formatCurrency(amount: Int, currency: String) -> String {
-        let dollars = Double(amount) / 100.0
-        return String(format: "%.2f %@", dollars, currency)
+        "\(formatCurrencyValue(amount: amount)) \(currency)"
+    }
+
+    private func formatCurrencyValue(amount: Int) -> String {
+        String(format: "%.2f", Double(amount) / 100.0)
     }
 
     var formattedFiveHourReset: String? {
@@ -185,31 +244,6 @@ struct UsageData: Codable, Sendable, Equatable {
         return formatCurrency(amount: used, currency: currency)
     }
 
-    var billableExtraUsageFormatted: String? {
-        guard let used = overageUsedCredits,
-              used > 0,
-              let currency = overageCurrency else {
-            return nil
-        }
-
-        let prepaidCoverage = effectivePrepaidCreditsTotal ?? effectivePrepaidCreditsRemaining
-        let billableAmount = max(0, used - prepaidCoverage)
-        guard billableAmount > 0 else { return nil }
-        return formatCurrency(amount: billableAmount, currency: currency)
-    }
-
-    var billableExtraUsageWithCapFormatted: String? {
-        guard let billable = billableExtraUsageFormatted else { return nil }
-        guard let limit = overageMonthlyLimit,
-              limit > 0,
-              let currency = overageCurrency else {
-            return billable
-        }
-
-        let amount = Double(limit) / 100.0
-        return "\(billable) / \(String(format: "%.2f %@", amount, currency))"
-    }
-
     private var effectivePrepaidCreditsRemaining: Int {
         let remaining = max(0, prepaidCreditsRemaining ?? 0)
         // Claude can return a one-cent residue for an empty prepaid balance.
@@ -221,8 +255,16 @@ struct UsageData: Codable, Sendable, Equatable {
         guard remaining > 0 else { return nil }
 
         let declaredTotal = max(0, prepaidCreditsTotal ?? 0)
-        let derivedTotal = remaining + max(0, overageUsedCredits ?? 0)
-        return max(declaredTotal, derivedTotal, remaining)
+        return max(declaredTotal, remaining)
+    }
+
+    private var effectivePaidCreditsRemaining: Int {
+        let remaining = max(0, paidCreditsRemaining ?? 0)
+        return remaining <= Self.cosmeticPrepaidResidueThresholdMinorUnits ? 0 : remaining
+    }
+
+    private var effectivePaidCreditsTotal: Int {
+        max(effectivePaidCreditsRemaining, max(0, paidCreditsTotal ?? 0))
     }
 
     var overageLimitFormatted: String? {
@@ -274,7 +316,12 @@ struct UsageData: Codable, Sendable, Equatable {
         prepaidCreditsRemaining: nil,
         prepaidCreditsTotal: nil,
         prepaidCreditsCurrency: nil,
+        prepaidCreditsArePromotional: nil,
         prepaidAutoReloadEnabled: nil,
+        paidCreditsRemaining: nil,
+        paidCreditsTotal: nil,
+        paidCreditsCurrency: nil,
+        pendingInvoiceAmount: nil,
         overageMonthlyLimit: nil,
         overageUsedCredits: nil,
         overageCurrency: nil,

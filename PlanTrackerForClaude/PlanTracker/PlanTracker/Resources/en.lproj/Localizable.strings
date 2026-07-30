@@ -7,6 +7,12 @@
 "%@ (7-Day)" = "%@ (7-Day)";
 "Extra Credits (Prepaid)" = "Extra Credits";
 "Extra Usage" = "Extra Usage";
+"Credit Balance" = "Credit Balance";
+"Promotional Credits" = "Promotional Credits";
+"Prepaid Credits" = "Prepaid Credits";
+"Invoiceable Spend" = "Invoiceable Spend";
+"Billable Extra Usage" = "Billable Extra Usage";
+"Usage Credit Spending" = "Usage Credit Spending";
 "Extra expenditure" = "Extra expenditure";
 "Enabled" = "Enabled";
 "Disabled" = "Disabled";

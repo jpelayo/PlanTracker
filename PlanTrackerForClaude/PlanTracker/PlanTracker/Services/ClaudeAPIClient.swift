@@ -970,9 +970,18 @@ nonisolated struct PrepaidCreditsResponse: Codable, Sendable {
     let amount: Int  // Amount in minor units (cents)
     let currency: String
     let autoReloadSettings: AutoReloadSettings?
+    let pendingInvoiceAmountCents: Int?
+    let tranches: [CreditTranche]?
+    let promoTranches: [CreditTranche]?
 
     struct AutoReloadSettings: Codable, Sendable {
         let enabled: Bool?
+    }
+
+    struct CreditTranche: Codable, Sendable {
+        let remainingAmountMinorUnits: Int
+        let currency: String
+        let grantedAmountMinorUnits: Int
     }
 }
 

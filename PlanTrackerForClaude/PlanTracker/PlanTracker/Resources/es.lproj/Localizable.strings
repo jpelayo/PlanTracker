@@ -8,6 +8,12 @@
 "Extra Credits" = "Créditos Extra";
 "Extra Credits (Prepaid)" = "Créditos Extra";
 "Extra Usage" = "Uso extra";
+"Credit Balance" = "Saldo de créditos";
+"Promotional Credits" = "Créditos promocionales";
+"Prepaid Credits" = "Créditos prepagados";
+"Invoiceable Spend" = "Gasto facturable";
+"Billable Extra Usage" = "Uso adicional facturable";
+"Usage Credit Spending" = "Gasto de créditos de uso";
 "Extra expenditure" = "Gasto adicional";
 "Enabled" = "Activado";
 "Disabled" = "Desactivado";

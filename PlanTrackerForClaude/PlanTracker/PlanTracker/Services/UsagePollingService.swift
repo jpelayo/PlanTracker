@@ -21,7 +21,12 @@ actor UsagePollingService {
         let prepaidCreditsRemaining: Int?
         let prepaidCreditsTotal: Int?
         let prepaidCreditsCurrency: String?
+        let prepaidCreditsArePromotional: Bool?
         let prepaidAutoReloadEnabled: Bool?
+        let paidCreditsRemaining: Int?
+        let paidCreditsTotal: Int?
+        let paidCreditsCurrency: String?
+        let pendingInvoiceAmount: Int?
         let overageMonthlyLimit: Int?
         let overageUsedCredits: Int?
         let overageCurrency: String?
@@ -141,13 +146,17 @@ actor UsagePollingService {
         let prepaidRemaining: Int?
         let prepaidTotal: Int?
         let prepaidCurrency: String?
+        let prepaidArePromotional: Bool?
         if let spend = usage.spend {
             // `/usage` may include `spend` while omitting its balance. Keep the
             // dedicated prepaid endpoint as a fallback so untouched free credit
             // still renders as a 0% gauge.
             let usageBalance = Self.normalizedPrepaidCreditsRemaining(spend.balance?.amountMinor)
             let billingBalance = Self.normalizedPrepaidCreditsRemaining(billing?.prepaidCreditsRemaining)
-            let prefersUsageBalance = Self.hasDisplayablePrepaidCredits(usageBalance)
+            let hasPromotionalBillingBalance = billing?.prepaidCreditsArePromotional == true
+                && Self.hasDisplayablePrepaidCredits(billingBalance)
+            let prefersUsageBalance = !hasPromotionalBillingBalance
+                && Self.hasDisplayablePrepaidCredits(usageBalance)
             let resolvedBalance = prefersUsageBalance ? usageBalance : billingBalance
 
             prepaidRemaining = resolvedBalance
@@ -157,11 +166,17 @@ actor UsagePollingService {
                     ? (spend.balance?.currency ?? billing?.prepaidCreditsCurrency ?? spendCurrency)
                     : billing?.prepaidCreditsCurrency)
                 : nil
+            prepaidArePromotional = Self.hasDisplayablePrepaidCredits(resolvedBalance)
+                ? billing?.prepaidCreditsArePromotional
+                : nil
         } else {
             let normalizedBalance = Self.normalizedPrepaidCreditsRemaining(billing?.prepaidCreditsRemaining)
             prepaidRemaining = normalizedBalance
             prepaidTotal = Self.hasDisplayablePrepaidCredits(normalizedBalance) ? billing?.prepaidCreditsTotal : nil
             prepaidCurrency = Self.hasDisplayablePrepaidCredits(normalizedBalance) ? billing?.prepaidCreditsCurrency : nil
+            prepaidArePromotional = Self.hasDisplayablePrepaidCredits(normalizedBalance)
+                ? billing?.prepaidCreditsArePromotional
+                : nil
         }
 
         let hasMonetaryOverage = {
@@ -196,7 +211,12 @@ actor UsagePollingService {
             prepaidCreditsRemaining: prepaidRemaining,
             prepaidCreditsTotal: prepaidTotal,
             prepaidCreditsCurrency: prepaidCurrency,
+            prepaidCreditsArePromotional: prepaidArePromotional,
             prepaidAutoReloadEnabled: billing?.prepaidAutoReloadEnabled,
+            paidCreditsRemaining: billing?.paidCreditsRemaining,
+            paidCreditsTotal: billing?.paidCreditsTotal,
+            paidCreditsCurrency: billing?.paidCreditsCurrency,
+            pendingInvoiceAmount: billing?.pendingInvoiceAmount,
             overageMonthlyLimit: spendLimit,
             overageUsedCredits: spendUsed,
             overageCurrency: spendCurrency,
@@ -258,14 +278,41 @@ actor UsagePollingService {
             var prepaidRemaining: Int?
             var prepaidTotal: Int?
             var prepaidCurrency: String?
+            var prepaidArePromotional: Bool?
+            var paidRemaining: Int?
+            var paidTotal: Int?
+            var paidCurrency: String?
+            var pendingInvoiceAmount: Int?
             var autoReloadEnabled: Bool?
-
             if let prepaidCredits {
-                prepaidRemaining = Self.normalizedPrepaidCreditsRemaining(prepaidCredits.amount)
-                prepaidCurrency = prepaidCredits.currency
                 autoReloadEnabled = prepaidCredits.autoReloadSettings?.enabled ?? false
-                if let creditGrant, creditGrant.granted {
-                    prepaidTotal = creditGrant.amountMinorUnits
+                pendingInvoiceAmount = Self.normalizedPrepaidCreditsRemaining(
+                    prepaidCredits.pendingInvoiceAmountCents
+                )
+
+                if let promotionalCredits = Self.promotionalCredits(from: prepaidCredits) {
+                    // Promo tranches identify their own grant and balance. Do not
+                    // mix the independent `spend.used` counter into this bucket.
+                    prepaidRemaining = Self.normalizedPrepaidCreditsRemaining(promotionalCredits.remaining)
+                    prepaidTotal = promotionalCredits.granted
+                    prepaidCurrency = promotionalCredits.currency
+                    prepaidArePromotional = true
+                    paidRemaining = Self.normalizedPrepaidCreditsRemaining(
+                        max(0, prepaidCredits.amount - promotionalCredits.remaining)
+                    )
+                    paidCurrency = prepaidCredits.currency
+                    if let paidCredits = Self.creditSummary(from: prepaidCredits.tranches) {
+                        paidRemaining = Self.normalizedPrepaidCreditsRemaining(paidCredits.remaining)
+                        paidTotal = paidCredits.granted
+                        paidCurrency = paidCredits.currency
+                    } else {
+                        paidTotal = paidRemaining
+                    }
+                } else {
+                    paidRemaining = Self.normalizedPrepaidCreditsRemaining(prepaidCredits.amount)
+                    paidCurrency = prepaidCredits.currency
+                    paidTotal = Self.creditSummary(from: prepaidCredits.tranches)?.granted
+                        ?? (creditGrant?.granted == true ? creditGrant?.amountMinorUnits : paidRemaining)
                 }
             }
 
@@ -278,7 +325,12 @@ actor UsagePollingService {
                 prepaidCreditsRemaining: prepaidRemaining,
                 prepaidCreditsTotal: prepaidTotal,
                 prepaidCreditsCurrency: prepaidCurrency,
+                prepaidCreditsArePromotional: prepaidArePromotional,
                 prepaidAutoReloadEnabled: autoReloadEnabled,
+                paidCreditsRemaining: paidRemaining,
+                paidCreditsTotal: paidTotal,
+                paidCreditsCurrency: paidCurrency,
+                pendingInvoiceAmount: pendingInvoiceAmount,
                 overageMonthlyLimit: overageSpendLimit?.monthlyCreditLimit,
                 overageUsedCredits: overageSpendLimit?.usedCredits,
                 overageCurrency: overageSpendLimit?.currency,
@@ -294,6 +346,38 @@ actor UsagePollingService {
             }
             throw error
         }
+    }
+
+    private static func promotionalCredits(
+        from response: PrepaidCreditsResponse
+    ) -> (remaining: Int, granted: Int, currency: String)? {
+        creditSummary(from: response.promoTranches)
+    }
+
+    private static func creditSummary(
+        from tranches: [PrepaidCreditsResponse.CreditTranche]?
+    ) -> (remaining: Int, granted: Int, currency: String)? {
+        guard let tranches else { return nil }
+
+        let validTranches = tranches.filter {
+            $0.grantedAmountMinorUnits > 0
+                && $0.remainingAmountMinorUnits >= 0
+                && !$0.currency.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        guard let first = validTranches.first else { return nil }
+
+        let currency = first.currency.uppercased()
+        guard validTranches.allSatisfy({ $0.currency.uppercased() == currency }) else {
+            return nil
+        }
+
+        let granted = validTranches.reduce(0) { $0 + $1.grantedAmountMinorUnits }
+        let remaining = validTranches.reduce(0) {
+            $0 + min($1.remainingAmountMinorUnits, $1.grantedAmountMinorUnits)
+        }
+        guard granted > 0 else { return nil }
+
+        return (remaining: remaining, granted: granted, currency: currency)
     }
 
     private func parseDate(_ string: String) -> Date? {

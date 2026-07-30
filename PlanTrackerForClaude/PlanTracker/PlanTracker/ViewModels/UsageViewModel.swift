@@ -36,6 +36,10 @@ final class UsageViewModel {
         }
     }
 
+    var nextAutomaticRefreshAt: Date? {
+        lastUpdated?.addingTimeInterval(TimeInterval(pollingIntervalMinutes * 60))
+    }
+
     var showRemainingPercent: Bool = true {
         didSet {
             UserDefaults.standard.set(showRemainingPercent, forKey: "showRemainingPercent")
@@ -337,7 +341,12 @@ final class UsageViewModel {
             prepaidCreditsRemaining: 4280,  // $42.80
             prepaidCreditsTotal: 5000,      // $50.00
             prepaidCreditsCurrency: "USD",
+            prepaidCreditsArePromotional: false,
             prepaidAutoReloadEnabled: false,
+            paidCreditsRemaining: 1000,
+            paidCreditsTotal: 1000,
+            paidCreditsCurrency: "USD",
+            pendingInvoiceAmount: nil,
             overageMonthlyLimit: 5000,      // $50.00
             overageUsedCredits: 1359,       // $13.59
             overageCurrency: "USD",

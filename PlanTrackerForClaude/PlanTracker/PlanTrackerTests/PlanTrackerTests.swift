@@ -46,7 +46,7 @@ struct PlanTrackerTests {
         #expect(usage.prepaidCreditsUtilization == 0)
     }
 
-    @Test func oneCentPrepaidResidueDoesNotOffsetBillableExtraSpend() {
+    @Test func usageCreditCapIsTrackedEvenWhenThePrepaidResidueIsHidden() {
         let usage = makeUsageData(
             prepaidCreditsRemaining: 1,
             prepaidCreditsTotal: 1,
@@ -57,8 +57,9 @@ struct PlanTrackerTests {
             overageEnabled: true
         )
 
-        #expect(usage.billableExtraUsageFormatted == "1.25 USD")
-        #expect(usage.billableExtraUsageWithCapFormatted == "1.25 USD / 5.00 USD")
+        #expect(usage.hasStartedExtraUsageSpend == true)
+        #expect(usage.overageUsedFormatted == "1.25 USD")
+        #expect(usage.overageUtilization == 25)
     }
 
     @Test func prepaidBalanceWithoutGrantTotalStillHasProgressDenominator() {
@@ -79,7 +80,7 @@ struct PlanTrackerTests {
         #expect(usage.prepaidCreditsUtilization == 0)
     }
 
-    @Test func freeCreditConsumptionIsNotShownAsBillableExtraSpend() {
+    @Test func freeCreditBalanceDoesNotInventConsumptionFromSpendCounter() {
         let usage = makeUsageData(
             prepaidCreditsRemaining: 19501,
             prepaidCreditsTotal: nil,
@@ -90,10 +91,77 @@ struct PlanTrackerTests {
             overageEnabled: true
         )
 
-        #expect(usage.prepaidCreditsTotalFormatted == "200.01 USD")
-        #expect(usage.prepaidCreditsSpentFormatted == "5.00 USD")
-        #expect(usage.billableExtraUsageFormatted == nil)
-        #expect(usage.billableExtraUsageWithCapFormatted == nil)
+        #expect(usage.prepaidCreditsTotalFormatted == "195.01 USD")
+        #expect(usage.prepaidCreditsSpentFormatted == "0.00 USD")
+        #expect(usage.hasStartedExtraUsageSpend == true)
+        #expect(usage.overageUsedFormatted == "5.00 USD")
+        #expect(usage.overageUtilization == 100)
+    }
+
+    @Test func promotionalCreditBalanceAndUsageCapAreSeparateDimensions() {
+        let usage = makeUsageData(
+            prepaidCreditsRemaining: 18132,
+            prepaidCreditsTotal: 20000,
+            prepaidCreditsCurrency: "USD",
+            overageMonthlyLimit: 500,
+            overageUsedCredits: 19,
+            overageCurrency: "USD",
+            overageEnabled: true
+        )
+
+        #expect(usage.prepaidCreditsRemainingFormatted == "181.32 USD")
+        #expect(usage.prepaidCreditsSpentFormatted == "18.68 USD")
+        #expect(usage.hasStartedExtraUsageSpend == true)
+        #expect(usage.overageUsedFormatted == "0.19 USD")
+        #expect(usage.overageUtilization == 3.8)
+    }
+
+    @Test func storedPrepaidCreditsUseMinorUnitsExactly() {
+        let usage = makeUsageData(
+            prepaidCreditsRemaining: nil,
+            prepaidCreditsTotal: nil,
+            prepaidCreditsCurrency: nil,
+            prepaidAutoReloadEnabled: false,
+            paidCreditsRemaining: 11331,
+            paidCreditsTotal: 11331,
+            paidCreditsCurrency: "USD",
+            overageMonthlyLimit: 20000,
+            overageUsedCredits: 0,
+            overageCurrency: "USD",
+            overageEnabled: true
+        )
+
+        #expect(usage.hasAvailablePaidCredits == true)
+        #expect(usage.paidCreditsRemainingFormatted == "113.31 USD")
+        #expect(usage.paidCreditsTotalFormatted == "113.31 USD")
+        #expect(usage.paidCreditsSpentValueFormatted == "0.00")
+    }
+
+    @Test func invoiceGaugeRequiresMoreThanOneCent() {
+        let hidden = makeUsageData(
+            prepaidCreditsRemaining: nil,
+            prepaidCreditsTotal: nil,
+            prepaidCreditsCurrency: nil,
+            pendingInvoiceAmount: 1,
+            overageMonthlyLimit: 20000,
+            overageUsedCredits: 0,
+            overageCurrency: "USD",
+            overageEnabled: true
+        )
+        let visible = makeUsageData(
+            prepaidCreditsRemaining: nil,
+            prepaidCreditsTotal: nil,
+            prepaidCreditsCurrency: nil,
+            pendingInvoiceAmount: 125,
+            overageMonthlyLimit: 20000,
+            overageUsedCredits: 0,
+            overageCurrency: "USD",
+            overageEnabled: true
+        )
+
+        #expect(hidden.pendingInvoiceFormatted == nil)
+        #expect(visible.pendingInvoiceFormatted == "1.25 USD")
+        #expect(visible.pendingInvoiceUtilization == 0.625)
     }
 
     @Test func claudeUsageDecodesDisabledExtraSpendControlObject() throws {
@@ -160,11 +228,45 @@ struct PlanTrackerTests {
         #expect(response.sevenDayScoped?.period.utilization == 99)
     }
 
+    @Test func prepaidCreditsDecodePromotionalTrancheWithoutSynthesizingTotal() throws {
+        let json = """
+        {
+          "amount": 18134,
+          "currency": "USD",
+          "balance_credits": 199,
+          "auto_reload_settings": null,
+          "pending_invoice_amount_cents": null,
+          "tranches": [],
+          "promo_tranches": [
+            {
+              "remaining_amount_minor_units": 18132,
+              "currency": "USD",
+              "granted_amount_minor_units": 20000
+            }
+          ]
+        }
+        """
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let response = try decoder.decode(PrepaidCreditsResponse.self, from: Data(json.utf8))
+
+        #expect(response.amount == 18134)
+        #expect(response.promoTranches?.count == 1)
+        #expect(response.promoTranches?.first?.grantedAmountMinorUnits == 20000)
+        #expect(response.promoTranches?.first?.remainingAmountMinorUnits == 18132)
+        #expect(response.pendingInvoiceAmountCents == nil)
+    }
+
     private func makeUsageData(
         prepaidCreditsRemaining: Int?,
         prepaidCreditsTotal: Int?,
         prepaidCreditsCurrency: String?,
         prepaidAutoReloadEnabled: Bool? = nil,
+        paidCreditsRemaining: Int? = nil,
+        paidCreditsTotal: Int? = nil,
+        paidCreditsCurrency: String? = nil,
+        pendingInvoiceAmount: Int? = nil,
         overageMonthlyLimit: Int?,
         overageUsedCredits: Int?,
         overageCurrency: String?,
@@ -189,7 +291,12 @@ struct PlanTrackerTests {
             prepaidCreditsRemaining: prepaidCreditsRemaining,
             prepaidCreditsTotal: prepaidCreditsTotal,
             prepaidCreditsCurrency: prepaidCreditsCurrency,
+            prepaidCreditsArePromotional: nil,
             prepaidAutoReloadEnabled: prepaidAutoReloadEnabled,
+            paidCreditsRemaining: paidCreditsRemaining,
+            paidCreditsTotal: paidCreditsTotal,
+            paidCreditsCurrency: paidCreditsCurrency,
+            pendingInvoiceAmount: pendingInvoiceAmount,
             overageMonthlyLimit: overageMonthlyLimit,
             overageUsedCredits: overageUsedCredits,
             overageCurrency: overageCurrency,
