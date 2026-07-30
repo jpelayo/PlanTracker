@@ -30,9 +30,9 @@ struct PlanTrackerTests {
         #expect(usage.prepaidCreditsUtilization == nil)
     }
 
-    @Test func prepaidCreditAboveResidueThresholdIsVisibleAtZeroUsage() {
+    @Test func promotionalCreditBecomesVisibleAtTwentyCents() {
         let usage = makeUsageData(
-            prepaidCreditsRemaining: 2,
+            prepaidCreditsRemaining: 20,
             prepaidCreditsTotal: nil,
             prepaidCreditsCurrency: "USD",
             overageMonthlyLimit: nil,
@@ -42,8 +42,35 @@ struct PlanTrackerTests {
         )
 
         #expect(usage.hasAvailablePrepaidCredits == true)
-        #expect(usage.prepaidCreditsRemainingFormatted == "0.02 USD")
+        #expect(usage.prepaidCreditsRemainingFormatted == "0.20 USD")
         #expect(usage.prepaidCreditsUtilization == 0)
+    }
+
+    @Test func nineteenCentCreditDustIsHiddenForBothBuckets() {
+        let promotional = makeUsageData(
+            prepaidCreditsRemaining: 19,
+            prepaidCreditsTotal: 20000,
+            prepaidCreditsCurrency: "USD",
+            overageMonthlyLimit: nil,
+            overageUsedCredits: 0,
+            overageCurrency: "USD",
+            overageEnabled: false
+        )
+        let paid = makeUsageData(
+            prepaidCreditsRemaining: nil,
+            prepaidCreditsTotal: nil,
+            prepaidCreditsCurrency: nil,
+            paidCreditsRemaining: 19,
+            paidCreditsTotal: 1000,
+            paidCreditsCurrency: "USD",
+            overageMonthlyLimit: nil,
+            overageUsedCredits: 0,
+            overageCurrency: "USD",
+            overageEnabled: false
+        )
+
+        #expect(promotional.hasAvailablePrepaidCredits == false)
+        #expect(paid.hasAvailablePaidCredits == false)
     }
 
     @Test func usageCreditCapIsTrackedEvenWhenThePrepaidResidueIsHidden() {

@@ -32,6 +32,9 @@
 "No usage limits available" = "No usage limits available";
 "Demo" = "Demo";
 "Claude status" = "Claude status";
+"Claude operational" = "Claude operational";
+"Claude degraded" = "Claude degraded";
+"Claude outage" = "Claude outage";
 
 /* Settings */
 "General" = "General";

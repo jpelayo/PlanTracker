@@ -7,6 +7,7 @@ import Foundation
 
 struct UsageData: Codable, Sendable, Equatable {
     nonisolated static let cosmeticPrepaidResidueThresholdMinorUnits = 1
+    nonisolated static let creditGaugeDustThresholdMinorUnits = 19
 
     let fiveHourUtilization: Double?
     let fiveHourResetsAt: Date?
@@ -247,7 +248,7 @@ struct UsageData: Codable, Sendable, Equatable {
     private var effectivePrepaidCreditsRemaining: Int {
         let remaining = max(0, prepaidCreditsRemaining ?? 0)
         // Claude can return a one-cent residue for an empty prepaid balance.
-        return remaining <= Self.cosmeticPrepaidResidueThresholdMinorUnits ? 0 : remaining
+        return remaining <= Self.creditGaugeDustThresholdMinorUnits ? 0 : remaining
     }
 
     private var effectivePrepaidCreditsTotal: Int? {
@@ -260,7 +261,7 @@ struct UsageData: Codable, Sendable, Equatable {
 
     private var effectivePaidCreditsRemaining: Int {
         let remaining = max(0, paidCreditsRemaining ?? 0)
-        return remaining <= Self.cosmeticPrepaidResidueThresholdMinorUnits ? 0 : remaining
+        return remaining <= Self.creditGaugeDustThresholdMinorUnits ? 0 : remaining
     }
 
     private var effectivePaidCreditsTotal: Int {

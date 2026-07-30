@@ -41,23 +41,6 @@ struct MenuBarView: View {
                     .clipShape(.capsule)
             }
 
-            if let status = viewModel.visibleClaudeSystemStatus {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(colorForClaudeStatus(status))
-                        .frame(width: 7, height: 7)
-
-                    Text(titleForClaudeStatus(status))
-                        .font(.caption2)
-                        .foregroundStyle(colorForClaudeStatus(status))
-                        .lineLimit(1)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(colorForClaudeStatus(status).opacity(0.12))
-                .clipShape(.capsule)
-            }
-
             if let email = viewModel.authState.email {
                 HStack(spacing: 4) {
                     Text(email)
@@ -69,10 +52,32 @@ struct MenuBarView: View {
                             .foregroundStyle(.orange)
                     }
                 }
-                if let sessionTime = viewModel.dailySessionFormatted {
-                    Text(sessionTime)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Group {
+                        if let sessionTime = viewModel.dailySessionFormatted {
+                            Text(sessionTime)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    let status = viewModel.displayedClaudeSystemStatus
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(colorForClaudeStatus(status))
+                            .frame(width: 6, height: 6)
+                        Text(titleForClaudeStatus(status))
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(colorForClaudeStatus(status))
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(colorForClaudeStatus(status).opacity(0.12))
+                    .clipShape(.capsule)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 if let extraExpenditureStatus = extraExpenditureStatusText {
                     Text(extraExpenditureStatus)
